@@ -81,6 +81,22 @@ export default function ChartsArea({ symbol, market }: { symbol: string | null; 
             <span className={clsx("tnum", m.changePct >= 0 ? "text-neon-green" : "text-neon-red")}>
               {fmtPrice(m.price)} ({fmtPct(m.changePct)})
             </span>
+            {m.halted && (
+              <span
+                className="px-1.5 py-0.5 rounded bg-neon-red/25 text-neon-red text-[11px] font-black"
+                title={m.haltReason || t("halted")}
+              >
+                ⏸ {t("halted")}
+              </span>
+            )}
+            {m.ssr && !m.halted && (
+              <span
+                className="px-1.5 py-0.5 rounded bg-neon-amber/15 text-neon-amber text-[11px] font-bold"
+                title={t("ssrTip")}
+              >
+                SSR
+              </span>
+            )}
             <Meta label="VWAP" v={fmtPrice(m.vwap)} />
             <Meta label="HoD" v={fmtPrice(m.dayHigh)} />
             <Meta label="PM-H" v={fmtPrice(m.premktHigh)} />

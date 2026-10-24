@@ -120,6 +120,10 @@ export function buildSymbolSnapshot(
   const greenScore = greenCount / GOLDEN_KEYS.length;
   const allGreen = greenCount === GOLDEN_KEYS.length;
 
+  // SSR: السهم هبط ≥10% عن إغلاق الأمس اليوم (قاعدة SEC 201؛ وللسعودي = ضرب حد ↓)
+  const effLow = s.dayLow === Infinity ? price : s.dayLow;
+  const ssr = s.prevClose > 0 && effLow <= s.prevClose * 0.9;
+
   return {
     symbol: s.symbol,
     name: s.name,
@@ -145,6 +149,9 @@ export function buildSymbolSnapshot(
     floatRot,
     atrReliable,
     liquidityNet: s.liquidityNet,
+    halted: s.halted || undefined,
+    haltReason: s.halted ? s.haltReason : undefined,
+    ssr: ssr || undefined,
     spread,
     bid: s.bid,
     ask: s.ask,

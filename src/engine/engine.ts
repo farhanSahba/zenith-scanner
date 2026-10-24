@@ -1,6 +1,6 @@
 import { MIN, SNAPSHOT_MS, ATR_PERIOD } from "./const";
 import { createAdapter } from "./adapters";
-import type { MarketAdapter, NewsEvent, SymbolSeed } from "./adapters/types";
+import type { MarketAdapter, NewsEvent, StatusEvent, SymbolSeed } from "./adapters/types";
 import { SymbolState } from "./symbolState";
 import { buildSymbolSnapshot } from "./snapshot";
 import { classify } from "./scanner";
@@ -81,6 +81,12 @@ function formatTg(a: Alert, s: SymbolSnapshot | undefined, market: MarketConfig)
       break;
     case "down2m":
       head = `🔻 <b>هبوط حاد</b>\n${sym}  ·  ${price}\n${num().toFixed(1)}% خلال دقيقتين`;
+      break;
+    case "halt":
+      head = `⏸️ <b>إيقاف تداول</b>\n${sym}  ·  ${price}\n${a.reason}`;
+      break;
+    case "resume":
+      head = `▶️ <b>استئناف التداول</b>\n${sym}  ·  ${price}\nعاد التداول بعد الإيقاف — راقب الحركة`;
       break;
     case "dilution":
       head = `⚠️ <b>تحذير: تخفيف</b>\n${sym}  ·  ${price}\nخبر طرح أسهم`;
@@ -193,7 +199,8 @@ export class ScannerEngine {
 
     this.adapter.start(
       (tick) => this.onTick(tick),
-      (ev) => this.onNews(ev)
+      (ev) => this.onNews(ev),
+      (ev) => this.onStatus(ev)
     );
 
     this.snapTimer = setInterval(() => this.buildSnapshot(), SNAPSHOT_MS);
@@ -289,6 +296,47 @@ export class ScannerEngine {
     if (!st) return;
     const phase = this.market.phaseFor(this.provider, tick.t);
     st.onTick(tick, phase);
+  }
+
+  // حدث حالة تداول (إيقاف/استئناف) — يحدّث الحالة ويطلق تنبيهاً مهمّاً (يصل Telegram)
+  private onStatus(ev: StatusEvent) {
+    const st = this.states.get(ev.symbol);
+    if (!st) return;
+    const now = Date.now();
+    if (ev.halted) {
+      if (st.halted) return; // موقوف أصلاً
+      st.halted = true;
+      st.haltReason = ev.reason;
+      st.haltedAt = ev.t || now;
+      const a: Alert = {
+        id: `halt-${ev.symbol}-${st.haltedAt}`,
+        symbol: ev.symbol,
+        name: this.nameOf(ev.symbol),
+        reason: ev.reason ? `إيقاف · ${ev.reason}` : "إيقاف تداول",
+        kind: "halt",
+        tier: "trigger",
+        price: round(st.price, 2),
+        warning: "⏸",
+        time: now,
+        tone: "info",
+      };
+      this.alerts = [a, ...this.alerts].slice(0, ALERTS_CAP);
+    } else {
+      if (!st.halted) return; // لم يكن موقوفاً
+      st.halted = false;
+      const a: Alert = {
+        id: `resume-${ev.symbol}-${now}`,
+        symbol: ev.symbol,
+        name: this.nameOf(ev.symbol),
+        reason: "استئناف التداول",
+        kind: "resume",
+        tier: "trigger",
+        price: round(st.price, 2),
+        time: now,
+        tone: "info",
+      };
+      this.alerts = [a, ...this.alerts].slice(0, ALERTS_CAP);
+    }
   }
 
   // اسم الشركة من الرمز: اسم الحالة (من المزوّد) → السجلّ المركزي للسعودي
@@ -441,9 +489,12 @@ export class ScannerEngine {
       if (now - a.time > 60_000) continue; // قديم (بعد إعادة التشغيل) — لا ترسل
       const important = a.tier === "trigger" || a.kind === "dilution"; // لحظة الدخول + التحذير
       if (!important) continue;
-      const last = this.tgLast.get(a.symbol) ?? 0;
-      if (now - last < 120_000) continue; // تهدئة لكل رمز لمنع إزعاج الجوال
-      this.tgLast.set(a.symbol, now);
+      const isEvent = a.kind === "halt" || a.kind === "resume"; // أحداث لحظية — تتجاوز التهدئة
+      if (!isEvent) {
+        const last = this.tgLast.get(a.symbol) ?? 0;
+        if (now - last < 120_000) continue; // تهدئة لكل رمز لمنع إزعاج الجوال
+        this.tgLast.set(a.symbol, now);
+      }
       void sendTelegram(formatTg(a, this.symSnaps.get(a.symbol), this.market));
     }
     if (this.tgSent.size > 5000) this.tgSent = new Set([...this.tgSent].slice(-2000));
@@ -493,6 +544,12 @@ export class ScannerEngine {
         float: st.float,
         changePct: snap?.changePct ?? st.changePct(),
         liquidityNet: st.liquidityNet,
+        halted: st.halted || undefined,
+        haltReason: st.halted ? st.haltReason : undefined,
+        ssr:
+          (st.prevClose > 0 &&
+            (st.dayLow === Infinity ? st.price : st.dayLow) <= st.prevClose * 0.9) ||
+          undefined,
       },
     };
   }
@@ -524,6 +581,9 @@ export interface ChartMeta {
   float: number;
   changePct: number;
   liquidityNet?: number; // صافي تدفّق السيولة (السعودي Pro)
+  halted?: boolean;
+  haltReason?: string;
+  ssr?: boolean;
 }
 
 // ===== مساعدات =====

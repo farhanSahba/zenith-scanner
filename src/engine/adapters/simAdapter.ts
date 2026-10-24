@@ -5,6 +5,7 @@ import type {
   MarketAdapter,
   NewsEvent,
   NewsHandler,
+  StatusHandler,
   SymbolSeed,
   TickHandler,
 } from "./types";
@@ -179,6 +180,9 @@ export class SimAdapter implements MarketAdapter {
   private seedList: SymbolSeed[];
   private timer: ReturnType<typeof setInterval> | null = null;
   private newsTimer: ReturnType<typeof setInterval> | null = null;
+  private haltTimer: ReturnType<typeof setInterval> | null = null;
+  private onStatus?: StatusHandler;
+  private halted = new Set<string>();
   private profile: SimProfile;
 
   constructor(count = 60, profile: SimProfile = "us") {
@@ -219,7 +223,10 @@ export class SimAdapter implements MarketAdapter {
     return this.seedList;
   }
 
-  start(onTick: TickHandler, onNews?: NewsHandler) {
+  start(onTick: TickHandler, onNews?: NewsHandler, onStatus?: StatusHandler) {
+    this.onStatus = onStatus;
+    // محاكاة إيقافات تداول نادرة (لاختبار/عرض كشف الإيقاف)
+    if (onStatus) this.haltTimer = setInterval(() => this.maybeHalt(), 8000);
     this.timer = setInterval(() => {
       const now = Date.now();
       for (const s of this.syms) {
@@ -305,11 +312,28 @@ export class SimAdapter implements MarketAdapter {
     return Math.max(1, Math.round(base * mult));
   }
 
+  // أحياناً يوقف رمزاً عشوائياً ثم يستأنفه بعد ثوانٍ (محاكاة Halt/LULD)
+  private maybeHalt() {
+    if (!this.onStatus || Math.random() > 0.35) return;
+    const avail = this.syms.filter((s) => !this.halted.has(s.seed.symbol));
+    if (!avail.length) return;
+    const sym = pick(avail).seed.symbol;
+    this.halted.add(sym);
+    const reasons = ["تعليق تقلّب (LULD)", "أخبار معلّقة", "عدم توازن أوامر"];
+    this.onStatus({ symbol: sym, halted: true, reason: pick(reasons), t: Date.now() });
+    setTimeout(() => {
+      this.halted.delete(sym);
+      this.onStatus?.({ symbol: sym, halted: false, t: Date.now() });
+    }, Math.round(rnd(6000, 18000)));
+  }
+
   stop() {
     if (this.timer) clearInterval(this.timer);
     if (this.newsTimer) clearInterval(this.newsTimer);
+    if (this.haltTimer) clearInterval(this.haltTimer);
     this.timer = null;
     this.newsTimer = null;
+    this.haltTimer = null;
   }
 }
 

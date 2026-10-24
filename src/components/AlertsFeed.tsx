@@ -88,6 +88,10 @@ function reasonLabel(a: Alert, t: (k: TKey) => string): string {
       return a.reason.replace("انفجار حجم", t("reasonSurge"));
     case "new":
       return a.reason.replace("مرشّح جديد", t("reasonNewCand"));
+    case "halt":
+      return a.reason; // "إيقاف · LULD" (جاهز من المحرّك)
+    case "resume":
+      return t("reasonResume");
     case "dilution":
       return t("reasonDilution");
     default:

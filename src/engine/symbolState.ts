@@ -17,6 +17,9 @@ export class SymbolState {
   dayLow = Infinity;
   premktHigh = 0;
   liquidityNet?: number; // صافي تدفّق السيولة (SAHMK Pro)
+  halted = false; // موقوف عن التداول الآن
+  haltReason?: string; // سبب الإيقاف
+  haltedAt?: number; // وقت آخر إيقاف (epoch ms)
 
   volume = 0; // الحجم التراكمي للجلسة (أسهم)
   private cumPV = 0; // Σ(سعر×حجم)

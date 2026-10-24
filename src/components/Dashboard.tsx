@@ -301,6 +301,10 @@ function alertSpeech(a: Alert): string {
       return `${sym} مرشّح جديد`;
     case "dilution":
       return `${sym} تحذير تخفيف`;
+    case "halt":
+      return `${sym} إيقاف تداول`;
+    case "resume":
+      return `${sym} استئناف التداول`;
     case "up2m":
     case "down2m": {
       const m = a.reason.match(/([+-]?[\d.]+)\s*% \/2Min/);

@@ -64,6 +64,12 @@ body {
   box-shadow: inset 2px 0 0 #1cff9b;
 }
 
+/* صف سهم موقوف عن التداول (Halt/LULD) — إبراز أحمر */
+.row-halted {
+  background: linear-gradient(90deg, rgba(255, 45, 85, 0.16), rgba(255, 45, 85, 0.03));
+  box-shadow: inset 2px 0 0 #ff2d55;
+}
+
 .panel {
   background: #0b0f15;
   border: 1px solid #161c26;

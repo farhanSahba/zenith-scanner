@@ -74,6 +74,9 @@ export interface SymbolSnapshot {
   floatRot: number;
   atrReliable: boolean; // ATR محسوب من بارات حقيقية (مو القيمة الاحتياطية)
   liquidityNet?: number; // صافي تدفّق السيولة (السوق السعودي Pro) — موجب=دخول، سالب=خروج
+  halted?: boolean; // السهم موقوف عن التداول الآن (Halt/LULD)
+  haltReason?: string; // سبب الإيقاف
+  ssr?: boolean; // قيد البيع على المكشوف (هبط ≥10% عن إغلاق الأمس)
   dilution?: boolean; // للسهم خبر طرح/تخفيف حديث (تحذير فخ)
   spread: number;
   bid: number;
@@ -93,6 +96,8 @@ export type AlertKind =
   | "up2m" // زخم دقيقتين صاعد
   | "down2m" // هبوط دقيقتين حاد
   | "new" // مرشّح جديد ساخن
+  | "halt" // إيقاف تداول (Halt/LULD)
+  | "resume" // استئناف التداول بعد إيقاف
   | "dilution"; // تحذير طرح/تخفيف أسهم
 
 // طبقة التنبيه: مبكرة (الصقر) / لحظة الدخول / تأكيد

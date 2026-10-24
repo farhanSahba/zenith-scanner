@@ -88,6 +88,7 @@ export default function ScannerTable({
               className={clsx(
                 "cursor-pointer border-b border-base-800 hover:bg-base-700/40",
                 s.allGreen && "row-allgreen",
+                s.halted && "row-halted",
                 selected === s.symbol && "ring-1 ring-inset ring-neon-cyan/60 bg-base-700/30"
               )}
             >
@@ -108,6 +109,22 @@ function Cell({ col, s }: { col: string; s: SymbolSnapshot }) {
     return (
       <td className="px-1.5 py-[3px] text-left whitespace-nowrap">
         <span className="font-bold text-slate-100">
+          {s.halted && (
+            <span
+              className="mr-1 px-1 rounded bg-neon-red/25 text-neon-red text-[9px] font-black align-middle"
+              title={s.haltReason || t("halted")}
+            >
+              ⏸ {t("halted")}
+            </span>
+          )}
+          {s.ssr && !s.halted && (
+            <span
+              className="mr-1 px-1 rounded bg-neon-amber/15 text-neon-amber text-[9px] font-bold align-middle"
+              title={t("ssrTip")}
+            >
+              SSR
+            </span>
+          )}
           {s.dilution && (
             <span className="text-neon-amber mr-1" title={t("dilutionWarn")}>
               ⚠

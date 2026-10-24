@@ -3,6 +3,7 @@ import type {
   MarketAdapter,
   NewsEvent,
   NewsHandler,
+  StatusHandler,
   SymbolSeed,
   TickHandler,
 } from "./types";
@@ -53,7 +54,16 @@ interface AlpacaMsg {
   t?: string;
   msg?: string;
   code?: number;
+  // رسائل حالة التداول (T:"s"): رمز الحالة + سبب
+  sc?: string; // status code: H=halt, P=LULD pause, T=resume, Q/R=quote resume
+  sm?: string; // status message
+  rc?: string; // reason code
+  rm?: string; // reason message
 }
+
+// رموز حالة التداول من Alpaca
+const HALT_CODES = new Set(["H", "P"]); // إيقاف / تعليق تقلّب (LULD)
+const RESUME_CODES = new Set(["T", "Q", "R"]); // استئناف التداول/التسعير
 
 // اتصال WebSocket واحد لفيد واحد بحالته الخاصة.
 class FeedConnection {
@@ -71,7 +81,9 @@ class FeedConnection {
     private secret: string,
     private getSymbols: () => string[],
     private withQuotes: boolean,
-    private onTick: TickHandler
+    private onTick: TickHandler,
+    private withStatuses = false,
+    private onStatus?: StatusHandler
   ) {}
 
   open() {
@@ -125,6 +137,19 @@ class FeedConnection {
             ask: q?.ask || m.p + half,
             t: m.t ? Date.parse(m.t) : Date.now(),
           });
+        } else if (m.T === "s" && m.S) {
+          // رسالة حالة تداول: إيقاف (H/P) أو استئناف (T/Q/R)
+          const sc = m.sc ?? "";
+          const halted = HALT_CODES.has(sc);
+          const resumed = RESUME_CODES.has(sc);
+          if ((halted || resumed) && this.onStatus) {
+            this.onStatus({
+              symbol: m.S,
+              halted,
+              reason: m.rm || m.sm || undefined,
+              t: m.t ? Date.parse(m.t) : Date.now(),
+            });
+          }
         }
       }
     };
@@ -147,11 +172,12 @@ class FeedConnection {
   // إرسال اشتراك لمجموعة رموز (Alpaca يسمح بإضافة اشتراكات دون قطع)
   private send(syms: string[]) {
     if (!this.ws || !this.authed || !syms.length) return;
-    const sub: { action: string; trades: string[]; quotes?: string[] } = {
+    const sub: { action: string; trades: string[]; quotes?: string[]; statuses?: string[] } = {
       action: "subscribe",
       trades: syms,
     };
     if (this.withQuotes) sub.quotes = syms;
+    if (this.withStatuses) sub.statuses = syms; // قناة حالة التداول (إيقاف/استئناف)
     this.ws.send(JSON.stringify(sub));
   }
 
@@ -467,7 +493,7 @@ export class AlpacaAdapter implements MarketAdapter {
     for (const c of this.conns) c.subscribeMore(fresh);
   }
 
-  start(onTick: TickHandler, _onNews?: NewsHandler) {
+  start(onTick: TickHandler, _onNews?: NewsHandler, onStatus?: StatusHandler) {
     const getSymbols = () => [...this.subscribed];
 
     const dayConn = new FeedConnection(
@@ -477,7 +503,9 @@ export class AlpacaAdapter implements MarketAdapter {
       this.secret,
       getSymbols,
       this.dayFeed !== "iex",
-      onTick
+      onTick,
+      true, // withStatuses — قناة إيقافات التداول (Halt/LULD) على الجلسة النهارية
+      onStatus
     );
     this.conns.push(dayConn);
 

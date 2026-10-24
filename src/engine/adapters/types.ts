@@ -24,8 +24,17 @@ export interface NewsEvent {
   sentiment?: "bull" | "bear" | "neutral" | "dilution"; // من سنتمنت AV
 }
 
+// حدث حالة تداول (إيقاف/استئناف) — من Alpaca statuses أو المحاكاة
+export interface StatusEvent {
+  symbol: string;
+  halted: boolean; // true=إيقاف/تعليق، false=استئناف
+  reason?: string; // سبب الإيقاف (LULD/أخبار معلّقة…)
+  t: number; // epoch ms
+}
+
 export type TickHandler = (tick: Tick) => void;
 export type NewsHandler = (news: NewsEvent) => void;
+export type StatusHandler = (ev: StatusEvent) => void;
 
 // الواجهة الموحّدة لأي مزوّد داتا (محاكاة أو حقيقي).
 // تبديل المزوّد = تنفيذ هذه الواجهة فقط؛ بقية النظام لا يتغيّر.
@@ -33,7 +42,7 @@ export interface MarketAdapter {
   readonly name: string;
   // تهيئة الكون (قد تكون async: المزوّد الحقيقي يجلب اللقطات هنا)
   prepare(): Promise<SymbolSeed[]>;
-  start(onTick: TickHandler, onNews?: NewsHandler): Promise<void> | void;
+  start(onTick: TickHandler, onNews?: NewsHandler, onStatus?: StatusHandler): Promise<void> | void;
   stop(): void;
   // فرز تلقائي: يرجع مرشّحي السوق الحاليين (للتحديث الحي بلا إعادة تشغيل)
   screen?(maxPrice: number, limit: number): Promise<SymbolSeed[]>;
