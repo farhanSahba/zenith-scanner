@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { SymbolSnapshot } from "@/engine/types";
 import { levelText, levelBg } from "@/lib/levels";
 import { fmtPrice, fmtVol } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 const LABELS: Record<string, string> = {
   name: "Name",
@@ -45,6 +46,7 @@ export default function ScannerTable({
   selected?: string;
   onSelect: (sym: string) => void;
 }) {
+  const { t } = useLang();
   return (
     <div dir="ltr" className="overflow-auto flex-1">
       <table className="w-full border-collapse text-[11px] tnum">
@@ -70,7 +72,7 @@ export default function ScannerTable({
                 colSpan={cols.length}
                 className="px-2 py-3 text-center text-slate-600 text-[11px]"
               >
-                — لا مرشّحين الآن —
+                {t("noCandidates")}
               </td>
             </tr>
           )}

@@ -5,6 +5,7 @@ import Chart from "./Chart";
 import type { OHLCV } from "@/engine/types";
 import type { ChartMeta } from "@/engine/engine";
 import { fmtPrice, fmtPct, fmtFloat } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 interface ChartData {
   bars1: OHLCV[];
@@ -13,6 +14,7 @@ interface ChartData {
 }
 
 export default function ChartsArea({ symbol }: { symbol: string | null }) {
+  const { t } = useLang();
   const [data, setData] = useState<ChartData | null>(null);
   const [narr, setNarr] = useState<{ loading: boolean; text?: string; ai?: boolean }>({
     loading: false,
@@ -88,7 +90,7 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
                   )
                 }
                 className="text-[11px] px-2.5 py-1 rounded bg-base-800 text-slate-300 border border-base-700 hover:text-white hover:border-slate-500"
-                title="افتح الرمز في TradingView (جلستك المدفوعة — شارت 24س)"
+                title={t("tvOpen")}
               >
                 📈 TradingView
               </button>
@@ -96,14 +98,12 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
                 onClick={readSetup}
                 className="text-[11px] px-2.5 py-1 rounded bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 hover:bg-neon-cyan/25"
               >
-                ✦ اقرأ السيتَب (Claude)
+                {t("chartReadSetup")}
               </button>
             </div>
           </>
         ) : (
-          <span className="text-slate-500 text-[12px]" dir="rtl">
-            اختر رمزاً من أي لوحة لعرض الرسم والتحليل
-          </span>
+          <span className="text-slate-500 text-[12px]">{t("chartSelectHint")}</span>
         )}
       </div>
 
@@ -111,13 +111,11 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
       {(narr.loading || narr.text) && (
         <div className="px-3 py-2 bg-base-850 border border-neon-cyan/20 rounded text-[12px] text-slate-300 whitespace-pre-line shrink-0">
           {narr.loading ? (
-            <span className="text-slate-500">...يقرأ Claude السيتَب</span>
+            <span className="text-slate-500">{t("chartReading")}</span>
           ) : (
             <>
               {narr.ai === false && (
-                <span className="text-[10px] text-slate-600 block mb-1">
-                  (تحليل قواعدي — فعّل مفتاح Claude لقراءة أعمق)
-                </span>
+                <span className="text-[10px] text-slate-600 block mb-1">{t("chartRuleNote")}</span>
               )}
               {narr.text}
             </>
@@ -127,8 +125,8 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
 
       {/* الفريمان */}
       <div className="flex gap-2 flex-1 min-h-0">
-        <Chart bars={data?.bars15 ?? []} meta={m ?? null} title="15 دقيقة" />
-        <Chart bars={data?.bars1 ?? []} meta={m ?? null} title="1 دقيقة" />
+        <Chart bars={data?.bars15 ?? []} meta={m ?? null} title={t("tf15")} />
+        <Chart bars={data?.bars1 ?? []} meta={m ?? null} title={t("tf1")} />
       </div>
     </div>
   );

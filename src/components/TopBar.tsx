@@ -1,15 +1,8 @@
 "use client";
 import clsx from "clsx";
-import type { Snapshot } from "@/engine/types";
+import type { Snapshot, SessionPhase } from "@/engine/types";
 import { fmtCountdown, fmtPct } from "@/lib/format";
-
-const PHASE_AR: Record<string, string> = {
-  pre: "ما قبل السوق",
-  regular: "الجلسة الرئيسية",
-  after: "ما بعد السوق",
-  overnight: "التداول الليلي (24س)",
-  closed: "السوق مغلق",
-};
+import { useLang } from "@/lib/i18n";
 
 export default function TopBar({
   snap,
@@ -22,7 +15,18 @@ export default function TopBar({
   tts: boolean;
   onToggleTts: () => void;
 }) {
+  const { t, toggle, lang } = useLang();
   const fut = snap?.futures ?? { dj: 0, sp: 0 };
+
+  const phaseKey: Record<SessionPhase, string> = {
+    pre: "phasePre",
+    regular: "phaseRegular",
+    after: "phaseAfter",
+    overnight: "phaseOvernight",
+    closed: "phaseClosed",
+  };
+  const phaseLabel = t((phaseKey[snap?.phase ?? "regular"] ?? "phaseRegular") as never);
+
   return (
     <header className="flex items-center gap-4 px-4 h-14 bg-base-850 border-b border-base-700 shrink-0">
       {/* الهوية */}
@@ -32,7 +36,7 @@ export default function TopBar({
         </div>
         <div className="leading-none">
           <div className="font-black text-slate-100 text-sm tracking-wide">ZENITH</div>
-          <div className="text-[10px] text-slate-500">ماسح الضاربة اللحظي</div>
+          <div className="text-[10px] text-slate-500">{t("subtitle")}</div>
         </div>
       </div>
 
@@ -46,7 +50,7 @@ export default function TopBar({
               : "text-neon-amber border-neon-amber/40 bg-neon-amber/10"
           )}
         >
-          {snap?.dataSource === "alpaca" ? "LIVE · Alpaca" : "SIM · محاكاة"}
+          {snap?.dataSource === "alpaca" ? "LIVE · Alpaca" : t("sim")}
         </span>
         <span className="flex items-center gap-1 text-[10px] text-slate-500">
           <span
@@ -55,9 +59,11 @@ export default function TopBar({
               connected ? "bg-neon-green animate-pulseDot" : "bg-neon-red"
             )}
           />
-          {connected ? "متصل" : "منقطع"}
+          {connected ? t("connected") : t("disconnected")}
         </span>
-        <span className="text-[10px] text-slate-600">· {snap?.universeCount ?? 0} رمز</span>
+        <span className="text-[10px] text-slate-600">
+          · {snap?.universeCount ?? 0} {t("symbols")}
+        </span>
       </div>
 
       {snap?.note && (
@@ -68,26 +74,24 @@ export default function TopBar({
 
       {/* مفتاح القاعدة الذهبية */}
       <div className="hidden lg:flex items-center gap-3 text-[10px] text-slate-500 border-s border-base-700 ps-4">
-        <Legend color="#1cff9b" label="نيون · أعلى احتمال" glow />
-        <Legend color="#1cff9b" label="أخضر" />
-        <Legend color="#94a3b8" label="محايد" />
-        <Legend color="#ff2d55" label="أحمر" />
-        <span className="text-slate-600">القاعدة: كل الأعمدة خضراء</span>
+        <Legend color="#1cff9b" label={t("legendNeon")} glow />
+        <Legend color="#1cff9b" label={t("legendGreen")} />
+        <Legend color="#94a3b8" label={t("legendNeutral")} />
+        <Legend color="#ff2d55" label={t("legendRed")} />
+        <span className="text-slate-600">{t("legendRule")}</span>
       </div>
 
-      {/* يمين: عقود + ساعة + عدّاد + صوت */}
+      {/* يمين: عقود + ساعة + عدّاد + صوت + لغة */}
       <div className="ms-auto flex items-center gap-4" dir="ltr">
         <Fut label="DJ" v={fut.dj} />
         <Fut label="S&P" v={fut.sp} />
         <div className="text-center leading-none">
-          <div className="text-[10px] text-slate-500">{PHASE_AR[snap?.phase ?? "regular"]}</div>
+          <div className="text-[10px] text-slate-500">{phaseLabel}</div>
           <div className="tnum text-slate-200 text-sm">{snap?.marketClock ?? "--:--:--"}</div>
         </div>
         <div className="text-center leading-none">
-          <div className="text-[10px] text-slate-500">AH Close</div>
-          <div className="tnum text-neon-cyan text-sm">
-            {fmtCountdown(snap?.toAhCloseMs ?? 0)}
-          </div>
+          <div className="text-[10px] text-slate-500">{t("ahClose")}</div>
+          <div className="tnum text-neon-cyan text-sm">{fmtCountdown(snap?.toAhCloseMs ?? 0)}</div>
         </div>
         <button
           onClick={onToggleTts}
@@ -97,9 +101,16 @@ export default function TopBar({
               ? "text-neon-green border-neon-green/40 bg-neon-green/10"
               : "text-slate-400 border-base-700 hover:bg-base-700/40"
           )}
-          title="تنبيهات صوتية عربية"
+          title={t("sound")}
         >
-          {tts ? "🔊 الصوت" : "🔇 الصوت"}
+          {tts ? "🔊" : "🔇"} {t("sound")}
+        </button>
+        <button
+          onClick={toggle}
+          className="text-[11px] px-2.5 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40 font-bold"
+          title={lang === "ar" ? "English" : "العربية"}
+        >
+          {t("langBtn")}
         </button>
       </div>
     </header>

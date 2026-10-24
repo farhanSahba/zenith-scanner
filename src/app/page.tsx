@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useStream } from "@/lib/useStream";
 import { setTtsEnabled, speakAr } from "@/lib/tts";
+import { LangProvider, useLang, type TKey } from "@/lib/i18n";
 import type { Alert, PanelKey } from "@/engine/types";
 import TopBar from "@/components/TopBar";
 import Panel from "@/components/Panel";
@@ -12,46 +13,55 @@ import ChartsArea from "@/components/ChartsArea";
 import AiConsole from "@/components/AiConsole";
 import NewsPanel from "@/components/NewsPanel";
 
-// تعريف اللوحات وأعمدتها
+// تعريف اللوحات وأعمدتها (العنوان عبر مفتاح ترجمة)
 const PANELS: {
   key: PanelKey;
-  title: string;
+  titleKey: TKey;
   accent: string;
   cols: string[];
 }[] = [
   {
     key: "momoHod",
-    title: "Momo HOD · قمة اليوم",
+    titleKey: "panelMomoHod",
     accent: "#1cff9b",
     cols: ["name", "price", "volume", "float", "zenV", "zenP", "atrSprd", "atrVwap", "atrHoD", "twoMin"],
   },
   {
     key: "gapUp",
-    title: "Gap Up · فجوات صاعدة",
+    titleKey: "panelGapUp",
     accent: "#39ff14",
     cols: ["name", "price", "gap", "volume", "float", "zenP", "atrSprd", "atrVwap", "atrHoD", "twoMin"],
   },
   {
     key: "gapUpLowFloat",
-    title: "Gap Up LowFloat · فلوت منخفض",
+    titleKey: "panelLowFloat",
     accent: "#22d3ee",
     cols: ["name", "price", "gap", "volume", "float", "zenP", "atrHoD"],
   },
   {
     key: "momo2mUp",
-    title: "2 min Momo UP",
+    titleKey: "panelMomoUp",
     accent: "#1cff9b",
     cols: ["name", "price", "twoMin", "volume", "zenVR", "zenP", "atrVwap", "atrHoD"],
   },
   {
     key: "momo2mDown",
-    title: "2 min Momo DOWN",
+    titleKey: "panelMomoDown",
     accent: "#ff2d55",
     cols: ["name", "price", "twoMin", "volume", "zenVR", "zenP", "atrVwap", "atrHoD"],
   },
 ];
 
 export default function Home() {
+  return (
+    <LangProvider>
+      <Dashboard />
+    </LangProvider>
+  );
+}
+
+function Dashboard() {
+  const { t } = useLang();
   const { snap, connected } = useStream();
   const [selected, setSelected] = useState<string | null>(null);
   const [tts, setTts] = useState(false);
@@ -98,7 +108,7 @@ export default function Home() {
             {PANELS.map((p) => (
               <Panel
                 key={p.key}
-                title={p.title}
+                title={t(p.titleKey)}
                 accent={p.accent}
                 badge={
                   <span className="text-slate-600 text-[10px]">
@@ -118,7 +128,7 @@ export default function Home() {
 
           <div className="w-[340px] shrink-0">
             <Panel
-              title="التنبيهات اللحظية · Alerts"
+              title={t("panelAlerts")}
               accent="#ffb020"
               className="h-full"
               badge={<span className="text-slate-600 text-[10px]">{snap?.alerts.length ?? 0}</span>}
@@ -137,10 +147,10 @@ export default function Home() {
           <div className="flex-[2] min-w-0 panel">
             <div className="flex border-b border-base-700 shrink-0">
               <TabBtn active={tab === "ai"} onClick={() => setTab("ai")}>
-                ✦ الماسح الذكي (عربي)
+                {t("aiTab")}
               </TabBtn>
               <TabBtn active={tab === "news"} onClick={() => setTab("news")}>
-                الأخبار {snap?.news.length ? `(${snap.news.length})` : ""}
+                {t("newsTab")} {snap?.news.length ? `(${snap.news.length})` : ""}
               </TabBtn>
             </div>
             <div className="flex-1 min-h-0">
@@ -183,7 +193,7 @@ function TabBtn({
 
 // تحويل التنبيه لنص عربي منطوق
 function alertSpeech(a: Alert): string {
-  const sym = a.symbol.split("").join(" "); // نطق الحروف مفصولة
+  const sym = a.symbol.split("").join(" ");
   if (a.reason.includes("To HoD")) return `${sym} يقترب من قمة اليوم`;
   const m = a.reason.match(/([+-]?[\d.]+)\s*% \/2Min/);
   if (m) {

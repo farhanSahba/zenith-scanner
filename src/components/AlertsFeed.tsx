@@ -2,6 +2,7 @@
 import clsx from "clsx";
 import type { Alert } from "@/engine/types";
 import { fmtClockLocal, fmtPrice } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 export default function AlertsFeed({
   alerts,
@@ -10,6 +11,7 @@ export default function AlertsFeed({
   alerts: Alert[];
   onSelect: (sym: string) => void;
 }) {
+  const { t } = useLang();
   return (
     <div dir="ltr" className="overflow-auto flex-1">
       <table className="w-full border-collapse text-[11px] tnum">
@@ -26,7 +28,7 @@ export default function AlertsFeed({
           {alerts.length === 0 && (
             <tr>
               <td colSpan={5} className="px-2 py-3 text-center text-slate-600">
-                — بانتظار التنبيهات —
+                {t("alertsWaiting")}
               </td>
             </tr>
           )}

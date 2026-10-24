@@ -3,6 +3,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import type { NewsItem } from "@/engine/types";
 import { fmtClockLocal } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 const SENT_COLOR: Record<string, string> = {
   bull: "text-neon-green border-neon-green/40",
@@ -18,6 +19,7 @@ export default function NewsPanel({
   news: NewsItem[];
   onSelect: (sym: string) => void;
 }) {
+  const { t } = useLang();
   const [open, setOpen] = useState<Record<string, { loading: boolean; text?: string; ai?: boolean }>>(
     {}
   );
@@ -40,7 +42,7 @@ export default function NewsPanel({
   return (
     <div className="overflow-auto flex-1 divide-y divide-base-800">
       {news.length === 0 && (
-        <div className="px-3 py-4 text-center text-slate-600 text-[12px]">— لا أخبار بعد —</div>
+        <div className="px-3 py-4 text-center text-slate-600 text-[12px]">{t("newsEmpty")}</div>
       )}
       {news.map((n) => {
         const st = open[n.id];
@@ -86,10 +88,10 @@ export default function NewsPanel({
                 onClick={() => analyze(n)}
                 className="text-[10px] px-2 py-[2px] rounded bg-neon-purple/15 text-neon-purple border border-neon-purple/30 hover:bg-neon-purple/25"
               >
-                ✦ تحليل Claude
+                {t("newsAnalyze")}
               </button>
-              {st?.loading && <span className="text-[10px] text-slate-500">...يحلّل</span>}
-              {st?.ai === false && <span className="text-[10px] text-slate-600">(بديل قواعدي)</span>}
+              {st?.loading && <span className="text-[10px] text-slate-500">{t("newsAnalyzing")}</span>}
+              {st?.ai === false && <span className="text-[10px] text-slate-600">{t("newsFallback")}</span>}
             </div>
             {st?.text && (
               <div className="mt-1 whitespace-pre-line text-[11px] text-slate-300 bg-base-850 border border-base-700 rounded p-2">
