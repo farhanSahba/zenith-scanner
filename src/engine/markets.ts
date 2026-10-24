@@ -21,6 +21,8 @@ export interface MarketConfig {
   nameAr: string;
   flag: string;
   currency: string;
+  tz: string; // التوقيت (IANA) لعرض وقت التنبيه
+  tvPrefix: string; // بادئة رمز TradingView (TADAWUL: للسعودي)
   providerEnv: string; // متغيّر البيئة لمزوّد هذا السوق
   simProfile: SimProfile;
   presets: Preset;
@@ -37,6 +39,8 @@ export const MARKETS: Record<MarketId, MarketConfig> = {
     nameAr: "السوق الأمريكي",
     flag: "🇺🇸",
     currency: "$",
+    tz: "America/New_York",
+    tvPrefix: "",
     providerEnv: "DATA_PROVIDER",
     simProfile: "us",
     presets: PRESETS_US,
@@ -51,6 +55,8 @@ export const MARKETS: Record<MarketId, MarketConfig> = {
     nameAr: "السوق السعودي",
     flag: "🇸🇦",
     currency: "﷼",
+    tz: "Asia/Riyadh",
+    tvPrefix: "TADAWUL:",
     providerEnv: "SA_DATA_PROVIDER",
     simProfile: "sa",
     presets: PRESETS_SA,

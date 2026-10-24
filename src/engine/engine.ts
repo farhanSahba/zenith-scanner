@@ -37,11 +37,11 @@ function isDilutionNews(n: NewsItem): boolean {
   return n.sentiment === "dilution" || DILUTION_RE.test(n.headline);
 }
 
-// وقت التنبيه بتوقيت السوق (ET)
-function tgTime(t: number): string {
+// وقت التنبيه بتوقيت السوق
+function tgTime(t: number, tz: string): string {
   try {
     return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "America/New_York",
+      timeZone: tz,
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -58,10 +58,10 @@ function fmtM(n: number): string {
   return `${round(n * 1000, 0)}K`;
 }
 
-// نص رسالة Telegram لتنبيه — عنوان مميّز + بيانات + سطر تنفيذي + وقت ورابط الشارت.
-function formatTg(a: Alert, s?: SymbolSnapshot): string {
+// نص رسالة Telegram لتنبيه — عنوان مميّز + بيانات + سطر تنفيذي + وقت ورابط الشارت (حسب السوق).
+function formatTg(a: Alert, s: SymbolSnapshot | undefined, market: MarketConfig): string {
   const sym = `<b>${a.symbol}</b>`;
-  const price = `${a.price}$`;
+  const price = `${a.price} ${market.currency}`;
   const num = () => {
     const n = parseFloat(a.reason.match(/[+-]?[\d.]+/)?.[0] ?? "0");
     return Number.isFinite(n) ? n : 0;
@@ -111,9 +111,10 @@ function formatTg(a: Alert, s?: SymbolSnapshot): string {
     action = `\n🚫 تجنّب — فخّ تخفيف محتمل`;
   }
 
-  // الوقت + رابط الشارت
-  const link = `<a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(a.symbol)}">📈 الشارت</a>`;
-  const foot = `\n⏰ ${tgTime(a.time)} ET · ${link}`;
+  // الوقت + رابط الشارت (بادئة TADAWUL للسعودي)
+  const tvSym = encodeURIComponent(market.tvPrefix + a.symbol);
+  const link = `<a href="https://www.tradingview.com/chart/?symbol=${tvSym}">📈 الشارت</a>`;
+  const foot = `\n⏰ ${tgTime(a.time, market.tz)} · ${link}`;
 
   return `${head}${data}${action}${foot}`;
 }
@@ -425,7 +426,7 @@ export class ScannerEngine {
       const last = this.tgLast.get(a.symbol) ?? 0;
       if (now - last < 120_000) continue; // تهدئة لكل رمز لمنع إزعاج الجوال
       this.tgLast.set(a.symbol, now);
-      void sendTelegram(formatTg(a, this.symSnaps.get(a.symbol)));
+      void sendTelegram(formatTg(a, this.symSnaps.get(a.symbol), this.market));
     }
     if (this.tgSent.size > 5000) this.tgSent = new Set([...this.tgSent].slice(-2000));
   }

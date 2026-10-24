@@ -39,6 +39,8 @@ export class SahmkAdapter implements MarketAdapter {
   private key: string;
   private index: string;
   private floats: Record<string, number>;
+  private floatCache = new Map<string, number>(); // فلوت مجلوب من fundamentals
+  private fetchFloat: boolean;
   private pollMs: number;
   private onTick?: TickHandler;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -50,7 +52,22 @@ export class SahmkAdapter implements MarketAdapter {
     if (!this.key) throw new Error("SAHMK_API_KEY مفقود");
     this.index = (process.env.SA_INDEX ?? "TASI").toUpperCase();
     this.floats = parseFloats(process.env.SA_FLOATS);
+    // جلب الفلوت تلقائياً من /company (يتطلب Starter+؛ مُطفأ افتراضياً لحماية حصّة المجاني)
+    this.fetchFloat = (process.env.SA_FETCH_FLOAT ?? "off").toLowerCase() === "on";
     this.pollMs = Math.max(5000, Number(process.env.SAHMK_POLL_MS ?? 15000));
+  }
+
+  // الفلوت بالملايين: يدوي (SA_FLOATS) → مجلوب (cache) → افتراضي 50M
+  private floatFor(sym: string): number {
+    return this.floats[sym] ?? this.floatCache.get(sym) ?? 50;
+  }
+
+  // يجلب الفلوت الحر من fundamentals ويخزّنه (اختياري)
+  private async loadFloat(sym: string) {
+    if (this.floats[sym] != null || this.floatCache.has(sym)) return;
+    const c = await this.get<{ fundamentals?: { float_shares?: number } }>(`/company/${sym}/`);
+    const fs = Number(c?.fundamentals?.float_shares);
+    if (Number.isFinite(fs) && fs > 0) this.floatCache.set(sym, Math.round(fs / 1_000_000));
   }
 
   // طلب REST مع مصادقة + إعادة محاولة متدرّجة لـ ECONNRESET المتقطّع
@@ -112,7 +129,7 @@ export class SahmkAdapter implements MarketAdapter {
     const vol = numOr(r.volume, 0);
     return {
       symbol: sym,
-      float: this.floats[sym] ?? 50, // افتراضي 50M (يُضبط عبر SA_FLOATS أو fundamentals لاحقاً)
+      float: this.floatFor(sym), // يدوي → مجلوب → افتراضي 50M
       avgDailyVol: vol > 0 ? vol : 1_000_000, // تقريب: لا متوسط في movers (يُحسّن من /historical في Pro)
       prevClose,
       open: price || prevClose,
@@ -125,6 +142,7 @@ export class SahmkAdapter implements MarketAdapter {
 
   async prepare(): Promise<SymbolSeed[]> {
     const rows = await this.fetchMovers();
+    if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
     const seeds: SymbolSeed[] = [];
     for (const r of rows) {
       this.lastVol.set(r.symbol as string, numOr(r.volume, 0));
@@ -165,6 +183,7 @@ export class SahmkAdapter implements MarketAdapter {
 
   async screen(maxPrice: number, limit: number): Promise<SymbolSeed[]> {
     const rows = await this.fetchMovers(Math.min(50, Math.max(10, limit)));
+    if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
     const out: SymbolSeed[] = [];
     for (const r of rows) {
       const price = numOr(r.price, 0);
