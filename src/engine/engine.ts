@@ -28,6 +28,13 @@ const CATALYST_AR: Record<NewsEvent["kind"], { ar: string; s: NewsItem["sentimen
   pr: { ar: "إعلان شراكة/منتج", s: "bull" },
 };
 
+// كشف أخبار الطرح/التخفيف: سنتمنت dilution (من AV/Claude) أو كلمات مفتاحية في العنوان.
+const DILUTION_RE =
+  /\b(offerings?|registered direct|at[- ]the[- ]market|public offerings?|private placements?|pricing of|proposed (public )?offerings?|shelf registrations?|capital raises?|underwritten|dilut\w*|warrants?)\b/i;
+function isDilutionNews(n: NewsItem): boolean {
+  return n.sentiment === "dilution" || DILUTION_RE.test(n.headline);
+}
+
 export class ScannerEngine {
   private adapter: MarketAdapter;
   private provider: string;
@@ -202,6 +209,25 @@ export class ScannerEngine {
     };
     this.news.unshift(item);
     if (this.news.length > NEWS_CAP) this.news.length = NEWS_CAP;
+
+    // تنبيه تخفيف: خبر طرح على سهم موجود في الكون (فخّ محتمل — تحذير أحمر).
+    // معرّف فريد من معرّف الخبر، وتنبيه واحد فقط لكل رمز (لا تكرار من عدة عناوين).
+    const st = this.states.get(item.symbol);
+    const already = this.alerts.some((a) => a.kind === "dilution" && a.symbol === item.symbol);
+    if (st && isDilutionNews(item) && !already) {
+      const a: Alert = {
+        id: `dilution-${item.id}`,
+        symbol: item.symbol,
+        reason: "تخفيف/طرح",
+        kind: "dilution",
+        tier: "trigger",
+        price: round(st.price, 2),
+        warning: "⚠",
+        time: item.time,
+        tone: "bear",
+      };
+      this.alerts = [a, ...this.alerts].slice(0, ALERTS_CAP);
+    }
   }
 
   private buildSnapshot() {
@@ -215,9 +241,14 @@ export class ScannerEngine {
         ? Math.max(0.05, Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05))
         : sessionFraction(now);
 
+    // رموز عليها خبر طرح/تخفيف حديث (لإظهار شارة التحذير على صفّها)
+    const dilutionSyms = new Set<string>();
+    for (const n of this.news) if (isDilutionNews(n)) dilutionSyms.add(n.symbol);
+
     const all: SymbolSnapshot[] = [];
     for (const st of this.states.values()) {
       const snap = buildSymbolSnapshot(st, { now, sessionProgress });
+      snap.dilution = dilutionSyms.has(snap.symbol);
       this.symSnaps.set(snap.symbol, snap);
       all.push(snap);
     }

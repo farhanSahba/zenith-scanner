@@ -81,6 +81,8 @@ function reasonLabel(a: Alert, t: (k: TKey) => string): string {
       return a.reason.replace("انفجار حجم", t("reasonSurge"));
     case "new":
       return a.reason.replace("مرشّح جديد", t("reasonNewCand"));
+    case "dilution":
+      return t("reasonDilution");
     default:
       return a.reason === "To HoD" ? t("reasonToHod") : a.reason;
   }

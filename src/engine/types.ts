@@ -65,6 +65,7 @@ export interface SymbolSnapshot {
   atrSprd: number;
   floatRot: number;
   atrReliable: boolean; // ATR محسوب من بارات حقيقية (مو القيمة الاحتياطية)
+  dilution?: boolean; // للسهم خبر طرح/تخفيف حديث (تحذير فخ)
   spread: number;
   bid: number;
   ask: number;
@@ -82,7 +83,8 @@ export type AlertKind =
   | "surge" // انفجار حجم
   | "up2m" // زخم دقيقتين صاعد
   | "down2m" // هبوط دقيقتين حاد
-  | "new"; // مرشّح جديد ساخن
+  | "new" // مرشّح جديد ساخن
+  | "dilution"; // تحذير طرح/تخفيف أسهم
 
 // طبقة التنبيه: مبكرة (الصقر) / لحظة الدخول / تأكيد
 export type AlertTier = "early" | "trigger" | "confirm";

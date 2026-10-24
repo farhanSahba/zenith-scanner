@@ -102,9 +102,15 @@ export default function ScannerTable({
 }
 
 function Cell({ col, s }: { col: string; s: SymbolSnapshot }) {
+  const { t } = useLang();
   if (col === "name") {
     return (
       <td className="px-1.5 py-[3px] text-left font-bold text-slate-100 whitespace-nowrap">
+        {s.dilution && (
+          <span className="text-neon-amber mr-1" title={t("dilutionWarn")}>
+            ⚠
+          </span>
+        )}
         {s.symbol}
       </td>
     );

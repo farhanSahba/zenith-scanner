@@ -244,6 +244,8 @@ function alertSpeech(a: Alert): string {
       return `${sym} انفجار حجم`;
     case "new":
       return `${sym} مرشّح جديد`;
+    case "dilution":
+      return `${sym} تحذير تخفيف`;
     case "up2m":
     case "down2m": {
       const m = a.reason.match(/([+-]?[\d.]+)\s*% \/2Min/);
