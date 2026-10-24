@@ -37,26 +37,85 @@ function isDilutionNews(n: NewsItem): boolean {
   return n.sentiment === "dilution" || DILUTION_RE.test(n.headline);
 }
 
-// نص رسالة Telegram لتنبيه — صيغة واضحة ومميّزة لكل نوع (أيقونة + عنوان + تفاصيل).
-function formatTg(a: Alert): string {
+// وقت التنبيه بتوقيت السوق (ET)
+function tgTime(t: number): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(t));
+  } catch {
+    return "";
+  }
+}
+
+// تنسيق أرقام بالملايين (فلوت/حجم)
+function fmtM(n: number): string {
+  if (n >= 1000) return `${round(n / 1000, 1)}B`;
+  if (n >= 1) return `${round(n, n >= 10 ? 0 : 1)}M`;
+  return `${round(n * 1000, 0)}K`;
+}
+
+// نص رسالة Telegram لتنبيه — عنوان مميّز + بيانات + سطر تنفيذي + وقت ورابط الشارت.
+function formatTg(a: Alert, s?: SymbolSnapshot): string {
   const sym = `<b>${a.symbol}</b>`;
   const price = `${a.price}$`;
   const num = () => {
     const n = parseFloat(a.reason.match(/[+-]?[\d.]+/)?.[0] ?? "0");
     return Number.isFinite(n) ? n : 0;
   };
+
+  // العنوان حسب النوع
+  let head: string;
   switch (a.kind) {
     case "toHod":
-      return `🟢 <b>كسر القمة</b> · دخول\n${sym}  ·  ${price}\nاخترق قمة اليوم بزخم صاعد`;
+      head = `🟢 <b>كسر القمة</b> · دخول\n${sym}  ·  ${price}\nاخترق قمة اليوم بزخم صاعد`;
+      break;
     case "up2m":
-      return `🚀 <b>زخم قوي</b> · دخول\n${sym}  ·  ${price}\n+${Math.abs(num()).toFixed(1)}% خلال دقيقتين`;
+      head = `🚀 <b>زخم قوي</b> · دخول\n${sym}  ·  ${price}\n+${Math.abs(num()).toFixed(1)}% خلال دقيقتين`;
+      break;
     case "down2m":
-      return `🔻 <b>هبوط حاد</b>\n${sym}  ·  ${price}\n${num().toFixed(1)}% خلال دقيقتين`;
+      head = `🔻 <b>هبوط حاد</b>\n${sym}  ·  ${price}\n${num().toFixed(1)}% خلال دقيقتين`;
+      break;
     case "dilution":
-      return `⚠️ <b>تحذير: تخفيف</b>\n${sym}  ·  ${price}\nخبر طرح أسهم — احذر الفخّ 🚫`;
+      head = `⚠️ <b>تحذير: تخفيف</b>\n${sym}  ·  ${price}\nخبر طرح أسهم`;
+      break;
     default:
-      return `🔔 ${sym}  ·  ${price}\n${a.reason}`;
+      head = `🔔 ${sym}  ·  ${price}\n${a.reason}`;
   }
+
+  // سطر البيانات (فلوت · حجم نسبي · فجوة · موقع VWAP)
+  let data = "";
+  if (s) {
+    const parts: string[] = [];
+    if (s.float > 0) parts.push(`فلوت ${fmtM(s.float)}`);
+    if (s.zenVR > 0) parts.push(`حجم ×${s.zenVR.toFixed(1)}`);
+    if (Math.abs(s.gapPct) >= 1) parts.push(`فجوة ${s.gapPct >= 0 ? "+" : ""}${s.gapPct.toFixed(0)}%`);
+    parts.push(s.price >= s.vwap ? "فوق VWAP" : "تحت VWAP");
+    if (parts.length) data = `\n📊 ${parts.join(" · ")}`;
+  }
+
+  // سطر تنفيذي (ستوب/هدف للدخول الصاعد؛ تحذير للهبوط/التخفيف)
+  let action = "";
+  if ((a.kind === "toHod" || a.kind === "up2m") && s && s.price > 0) {
+    // ستوب منطقي: VWAP إن كان قريباً، لكن لا يتجاوز 5% (مناسب للسكالب)
+    const vwapStop = s.price >= s.vwap && s.vwap > 0 ? s.vwap : s.price * 0.95;
+    const stop = Math.max(vwapStop, s.price * 0.95);
+    const risk = Math.max(s.price - stop, s.price * 0.005);
+    action = `\n🎯 ستوب ${round(stop)} · هدف ${round(s.price + 2 * risk)} (1:2)`;
+  } else if (a.kind === "down2m") {
+    action = `\n🔻 ابتعد عن الشراء`;
+  } else if (a.kind === "dilution") {
+    action = `\n🚫 تجنّب — فخّ تخفيف محتمل`;
+  }
+
+  // الوقت + رابط الشارت
+  const link = `<a href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(a.symbol)}">📈 الشارت</a>`;
+  const foot = `\n⏰ ${tgTime(a.time)} ET · ${link}`;
+
+  return `${head}${data}${action}${foot}`;
 }
 
 export class ScannerEngine {
@@ -363,7 +422,7 @@ export class ScannerEngine {
       const last = this.tgLast.get(a.symbol) ?? 0;
       if (now - last < 120_000) continue; // تهدئة لكل رمز لمنع إزعاج الجوال
       this.tgLast.set(a.symbol, now);
-      void sendTelegram(formatTg(a));
+      void sendTelegram(formatTg(a, this.symSnaps.get(a.symbol)));
     }
     if (this.tgSent.size > 5000) this.tgSent = new Set([...this.tgSent].slice(-2000));
   }
