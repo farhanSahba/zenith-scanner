@@ -1,4 +1,4 @@
-import type { Tick } from "../types";
+import type { OHLCV, Tick } from "../types";
 
 // بذرة تهيئة رمز في الكون
 export interface SymbolSeed {
@@ -39,4 +39,6 @@ export interface MarketAdapter {
   screen?(maxPrice: number, limit: number): Promise<SymbolSeed[]>;
   // إضافة رموز جديدة للبثّ الحي (دون قطع الاتصال)
   subscribe?(symbols: string[]): void;
+  // تاريخ 15د لرمز (لسياق الشارت) — المزوّد الحقيقي الذي يوفّره (SAHMK Pro)
+  history?(symbol: string): Promise<OHLCV[]>;
 }

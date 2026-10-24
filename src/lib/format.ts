@@ -21,6 +21,17 @@ export function fmtFloat(m: number): string {
   return m >= 1 ? m.toFixed(m < 10 ? 1 : 0) + "M" : Math.round(m * 1000) + "K";
 }
 
+// صافي تدفّق السيولة (ريال) → مختصر بإشارة (مليون/مليار)
+export function fmtFlow(v: number): string {
+  if (!Number.isFinite(v)) return "—";
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
+  const a = Math.abs(v);
+  if (a >= 1e9) return sign + (a / 1e9).toFixed(1) + "ب";
+  if (a >= 1e6) return sign + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "م";
+  if (a >= 1e3) return sign + Math.round(a / 1e3) + "ألف";
+  return sign + Math.round(a);
+}
+
 export function fmtClockLocal(t: number): string {
   const d = new Date(t);
   const p = (n: number) => String(n).padStart(2, "0");

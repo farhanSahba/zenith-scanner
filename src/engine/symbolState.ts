@@ -16,6 +16,7 @@ export class SymbolState {
   dayHigh = 0;
   dayLow = Infinity;
   premktHigh = 0;
+  liquidityNet?: number; // صافي تدفّق السيولة (SAHMK Pro)
 
   volume = 0; // الحجم التراكمي للجلسة (أسهم)
   private cumPV = 0; // Σ(سعر×حجم)
@@ -23,6 +24,7 @@ export class SymbolState {
   private vwapSamples: number[] = []; // قيم VWAP عند إغلاق كل بار (للميل)
 
   bars1m: OHLCV[] = [];
+  hist15: OHLCV[] = []; // بارات 15د تاريخية (SAHMK Pro) — للسياق في إطار الـ15د
   private curBar: OHLCV | null = null;
 
   private priceHist: { t: number; p: number }[] = []; // آخر ~3 دقائق
@@ -87,17 +89,29 @@ export class SymbolState {
     this.price = tk.price;
     this.bid = tk.bid;
     this.ask = tk.ask;
+    if (tk.liquidityNet !== undefined) this.liquidityNet = tk.liquidityNet;
 
     // الحجم التراكمي و VWAP يُحسبان في كل الجلسات النشطة (قبل/رئيسية/بعد/ليلي)
+    const authoritative = tk.dayVolume !== undefined; // مزوّد لقطات كامل (SAHMK Pro)
     if (phase !== "closed") {
-      this.volume += tk.size;
-      this.cumPV += tk.price * tk.size;
-      this.vwap = this.volume > 0 ? this.cumPV / this.volume : tk.price;
+      if (authoritative) {
+        // زامن مع الواقع بدل تجميع الدلتا — أدقّ للحجم و VWAP
+        this.volume = tk.dayVolume as number;
+        this.vwap = tk.dayVwap && tk.dayVwap > 0 ? tk.dayVwap : this.vwap || tk.price;
+        this.cumPV = this.volume * this.vwap;
+      } else {
+        this.volume += tk.size;
+        this.cumPV += tk.price * tk.size;
+        this.vwap = this.volume > 0 ? this.cumPV / this.volume : tk.price;
+      }
     } else if (this.vwap === 0) {
       this.vwap = tk.price;
     }
 
+    // قمة/قاع اليوم: من الحقول الحقيقية إن وُجدت، ثم من السعر
+    if (tk.dayHigh !== undefined && tk.dayHigh > this.dayHigh) this.dayHigh = tk.dayHigh;
     if (tk.price > this.dayHigh) this.dayHigh = tk.price;
+    if (tk.dayLow !== undefined && tk.dayLow > 0 && tk.dayLow < this.dayLow) this.dayLow = tk.dayLow;
     if (tk.price < this.dayLow) this.dayLow = tk.price;
     if (phase === "pre" && tk.price > this.premktHigh) this.premktHigh = tk.price;
 

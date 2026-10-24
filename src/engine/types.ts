@@ -19,6 +19,12 @@ export interface Tick {
   bid: number;
   ask: number;
   t: number; // epoch ms
+  // حقول لحظية اختيارية من مزوّد لقطات كامل (SAHMK Pro): تُزامن حالة اليوم مع الواقع
+  dayHigh?: number; // قمة الجلسة الحقيقية
+  dayLow?: number; // قاع الجلسة الحقيقي
+  dayVolume?: number; // حجم الجلسة الكلي (يحلّ محل تجميع الدلتا)
+  dayVwap?: number; // VWAP الجلسة الحقيقي (value/volume)
+  liquidityNet?: number; // صافي تدفّق السيولة (داخل − خارج) بالريال
 }
 
 export type SessionPhase = "pre" | "regular" | "after" | "overnight" | "closed";
@@ -67,6 +73,7 @@ export interface SymbolSnapshot {
   atrSprd: number;
   floatRot: number;
   atrReliable: boolean; // ATR محسوب من بارات حقيقية (مو القيمة الاحتياطية)
+  liquidityNet?: number; // صافي تدفّق السيولة (السوق السعودي Pro) — موجب=دخول، سالب=خروج
   dilution?: boolean; // للسهم خبر طرح/تخفيف حديث (تحذير فخ)
   spread: number;
   bid: number;

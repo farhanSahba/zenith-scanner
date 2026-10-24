@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Chart from "./Chart";
 import type { OHLCV } from "@/engine/types";
 import type { ChartMeta } from "@/engine/engine";
-import { fmtPrice, fmtPct, fmtFloat } from "@/lib/format";
+import { fmtPrice, fmtPct, fmtFloat, fmtFlow } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 interface ChartData {
@@ -86,6 +86,14 @@ export default function ChartsArea({ symbol, market }: { symbol: string | null; 
             <Meta label="PM-H" v={fmtPrice(m.premktHigh)} />
             <Meta label="ATR" v={m.atr.toFixed(3)} />
             <Meta label="Float" v={fmtFloat(m.float)} />
+            {m.liquidityNet != null && (
+              <span className="text-[11px] text-slate-500">
+                {t("colFlow")}{" "}
+                <span className={clsx("tnum", m.liquidityNet >= 0 ? "text-neon-green" : "text-neon-red")}>
+                  {fmtFlow(m.liquidityNet)}
+                </span>
+              </span>
+            )}
             <div className="ms-auto flex items-center gap-2">
               <button
                 onClick={() =>

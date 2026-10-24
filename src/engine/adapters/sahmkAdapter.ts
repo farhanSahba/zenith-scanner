@@ -1,23 +1,45 @@
 import { SA_NAMES } from "../saNames";
-import type { Tick } from "../types";
+import type { OHLCV, Tick } from "../types";
 import type { MarketAdapter, NewsHandler, SymbolSeed, TickHandler } from "./types";
 
-// ===== مزوّد SAHMK (سهمك) للسوق السعودي (تداول) =====
-// المرحلة 2: مسار REST عبر الحركة (movers) — متوافق مع الخطة المجانية.
-// المجاني: مؤجّل ~15د، بلا WebSocket، 100 طلب/يوم. اللحظي (WebSocket) يتطلب Pro.
-// التوثيق: https://www.sahmk.sa/en/developers · Base: https://api.sahmk.sa/api/v1 · مصادقة X-API-Key
+// ===== مزوّد SAHMK (سهمك) للسوق السعودي (تداول) — المرحلة 3 (Pro) =====
+// داتا لحظية (is_delayed=false) عبر REST: الكون من الحركة (movers)، والتحديث من /quotes
+// دفعة (حتى 50 رمز/طلب) بلقطة كاملة: bid/ask/OHLC/حجم/قيمة + تدفّق السيولة.
+// إثراء: متوسط حجم حقيقي من /historical (1d) لـ ZenVR دقيق، والفلوت من /company fundamentals،
+// وتعبئة الشارت من /historical (1min). التوثيق: https://www.sahmk.sa/en/developers
+// Base: https://api.sahmk.sa/api/v1 · مصادقة X-API-Key
 
 const BASE = "https://api.sahmk.sa/api/v1";
+const BATCH = 50; // أقصى رموز لكل /quotes (max_symbols)
 
 interface MoverRow {
+  symbol?: string;
+}
+
+interface Quote {
   symbol?: string;
   name?: string;
   name_en?: string;
   price?: number;
   change?: number;
-  change_percent?: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  previous_close?: number;
   volume?: number;
-  value?: number;
+  value?: number; // قيمة التداول (للـ VWAP = value/volume)
+  bid?: number;
+  ask?: number;
+  liquidity?: { net_value?: number };
+}
+
+interface HistBar {
+  date?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
 }
 
 const numOr = (v: unknown, d: number): number => {
@@ -35,15 +57,29 @@ function parseFloats(s?: string): Record<string, number> {
   return out;
 }
 
+// تنفيذ مهامّ غير متزامنة بتزامن محدود (ألطف على الـ API من Promise.all الجماعي)
+async function mapLimit<T>(items: T[], limit: number, fn: (x: T) => Promise<void>) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
+}
+
 export class SahmkAdapter implements MarketAdapter {
   readonly name = "sahmk";
   private key: string;
   private index: string;
-  private floats: Record<string, number>;
-  private floatCache = new Map<string, number>(); // فلوت مجلوب من fundamentals
+  private floats: Record<string, number>; // يدوي (SA_FLOATS)
+  private floatCache = new Map<string, number>(); // فلوت مجلوب (بالملايين)
+  private avgVolCache = new Map<string, number>(); // متوسط حجم يومي مجلوب (أسهم)
   private fetchFloat: boolean;
   private pollMs: number;
-  private isOpen: () => boolean; // هل السوق مفتوح الآن؟ (لعدم حرق الحصّة والسوق مغلق)
+  private isOpen: () => boolean;
+  private universe = new Set<string>(); // كل الرموز المتتبَّعة (للاستطلاع الدفعي)
   private onTick?: TickHandler;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastVol = new Map<string, number>();
@@ -54,24 +90,20 @@ export class SahmkAdapter implements MarketAdapter {
     if (!this.key) throw new Error("SAHMK_API_KEY مفقود");
     this.index = (process.env.SA_INDEX ?? "TASI").toUpperCase();
     this.floats = parseFloats(process.env.SA_FLOATS);
-    // جلب الفلوت تلقائياً من /company (يتطلب Starter+؛ مُطفأ افتراضياً لحماية حصّة المجاني)
-    this.fetchFloat = (process.env.SA_FETCH_FLOAT ?? "off").toLowerCase() === "on";
-    this.pollMs = Math.max(5000, Number(process.env.SAHMK_POLL_MS ?? 15000));
-    // افتراضياً مفتوح دائماً؛ المصنع يمرّر فحص ساعة تداول الفعلية.
+    // Pro: الفلوت التلقائي مُفعّل افتراضياً (مُطفأ فقط عند SA_FETCH_FLOAT=off)
+    this.fetchFloat = (process.env.SA_FETCH_FLOAT ?? "on").toLowerCase() !== "off";
+    // Pro: استطلاع أسرع (افتراضي 4ث) — لا حدّ طلبات يومي
+    this.pollMs = Math.max(2000, Number(process.env.SAHMK_POLL_MS ?? 4000));
     this.isOpen = opts?.isOpen ?? (() => true);
   }
 
-  // الفلوت بالملايين: يدوي (SA_FLOATS) → مجلوب (cache) → افتراضي 50M
+  // الفلوت بالملايين: يدوي (SA_FLOATS) → مجلوب (fundamentals) → افتراضي 50M
   private floatFor(sym: string): number {
     return this.floats[sym] ?? this.floatCache.get(sym) ?? 50;
   }
-
-  // يجلب الفلوت الحر من fundamentals ويخزّنه (اختياري)
-  private async loadFloat(sym: string) {
-    if (this.floats[sym] != null || this.floatCache.has(sym)) return;
-    const c = await this.get<{ fundamentals?: { float_shares?: number } }>(`/company/${sym}/`);
-    const fs = Number(c?.fundamentals?.float_shares);
-    if (Number.isFinite(fs) && fs > 0) this.floatCache.set(sym, Math.round(fs / 1_000_000));
+  // متوسط الحجم اليومي (أسهم): مجلوب، وإلا undefined (المستدعي يقرّر التقريب)
+  private avgVolFor(sym: string): number | undefined {
+    return this.avgVolCache.get(sym);
   }
 
   // طلب REST مع مصادقة + إعادة محاولة متدرّجة لـ ECONNRESET المتقطّع
@@ -81,12 +113,12 @@ export class SahmkAdapter implements MarketAdapter {
       "User-Agent": "ZenithScanner/1.0",
       Accept: "application/json",
     };
-    const delays = [400, 900, 1800, 3500]; // 5 محاولات إجمالاً
+    const delays = [300, 700, 1500, 3000];
     for (let i = 0; i <= delays.length; i++) {
       try {
         const r = await fetch(`${BASE}${path}`, { headers });
         if (r.status === 429) {
-          console.warn("[SAHMK] 429 — تجاوز حدّ الطلبات (المجاني 100/يوم).");
+          console.warn("[SAHMK] 429 — تجاوز حدّ معدّل الطلبات (أبطئ SAHMK_POLL_MS).");
           return null;
         }
         if (!r.ok) {
@@ -106,107 +138,175 @@ export class SahmkAdapter implements MarketAdapter {
     return null;
   }
 
-  // الحركة (الرابحون + الأعلى حجماً) موحّدة — تسلسلياً لتقليل ضغط الاتصالات
-  private async fetchMovers(limit = 50): Promise<MoverRow[]> {
+  // اكتشاف الكون: الرابحون + الأعلى حجماً (رموز فقط)
+  private async discover(limit = 50): Promise<string[]> {
     const g = await this.get<{ gainers?: MoverRow[] }>(
       `/market/gainers/?index=${this.index}&limit=${limit}`
     );
     const v = await this.get<{ stocks?: MoverRow[] }>(
       `/market/volume/?index=${this.index}&limit=${limit}`
     );
-    const rows = [...(g?.gainers ?? []), ...(v?.stocks ?? [])];
-    const seen = new Set<string>();
-    const out: MoverRow[] = [];
-    for (const r of rows) {
-      if (!r?.symbol || seen.has(r.symbol)) continue;
-      seen.add(r.symbol);
-      out.push(r);
+    const syms = new Set<string>();
+    for (const r of [...(g?.gainers ?? []), ...(v?.stocks ?? [])]) {
+      if (r?.symbol) syms.add(r.symbol);
+    }
+    return [...syms];
+  }
+
+  // لقطات كاملة دفعة (حتى 50/طلب) → خريطة رمز→لقطة
+  private async fetchQuotes(symbols: string[]): Promise<Map<string, Quote>> {
+    const out = new Map<string, Quote>();
+    for (let i = 0; i < symbols.length; i += BATCH) {
+      const chunk = symbols.slice(i, i + BATCH);
+      const d = await this.get<{ quotes?: Quote[] }>(`/quotes/?symbols=${chunk.join(",")}`);
+      for (const q of d?.quotes ?? []) if (q?.symbol) out.set(q.symbol, q);
     }
     return out;
   }
 
-  private seedFromRow(r: MoverRow): SymbolSeed {
-    const sym = r.symbol as string;
-    const price = numOr(r.price, 0);
-    const change = numOr(r.change, 0);
-    const prevClose = price - change > 0.01 ? price - change : price || 1;
-    const vol = numOr(r.volume, 0);
+  // متوسط الحجم اليومي من /historical (1d) — لـ ZenVR دقيق (مرة لكل رمز)
+  private async loadAvgVol(sym: string) {
+    if (this.avgVolCache.has(sym)) return;
+    const d = await this.get<{ data?: HistBar[] }>(`/historical/${sym}/?interval=1d&limit=20`);
+    const vols = (d?.data ?? []).map((b) => numOr(b.volume, 0)).filter((v) => v > 0);
+    if (vols.length) this.avgVolCache.set(sym, Math.round(vols.reduce((a, b) => a + b, 0) / vols.length));
+  }
+
+  // الفلوت الحر من /company fundamentals (بالملايين) — مرة لكل رمز
+  private async loadFloat(sym: string) {
+    if (this.floats[sym] != null || this.floatCache.has(sym)) return;
+    const c = await this.get<{ fundamentals?: { float_shares?: number } }>(`/company/${sym}/`);
+    const fs = Number(c?.fundamentals?.float_shares);
+    if (Number.isFinite(fs) && fs > 0) this.floatCache.set(sym, Math.round(fs / 1_000_000));
+  }
+
+  // إثراء رموز (متوسط الحجم + الفلوت) بتزامن محدود قبل البذر
+  private async enrich(symbols: string[]) {
+    await mapLimit(symbols, 8, async (sym) => {
+      await this.loadAvgVol(sym);
+      if (this.fetchFloat) await this.loadFloat(sym);
+    });
+  }
+
+  private seedFromQuote(q: Quote): SymbolSeed {
+    const sym = q.symbol as string;
+    const price = numOr(q.price, 0);
+    const pc = numOr(q.previous_close, 0);
+    const prevClose = pc > 0.01 ? pc : (price - numOr(q.change, 0) > 0.01 ? price - numOr(q.change, 0) : price || 1);
+    const open = numOr(q.open, 0) || price || prevClose;
+    const high = Math.max(numOr(q.high, 0), price, open);
+    const vol = numOr(q.volume, 0);
+    const value = numOr(q.value, 0);
+    const vwap = vol > 0 && value > 0 ? value / vol : price || prevClose;
     return {
       symbol: sym,
-      name: r.name?.trim() || r.name_en?.trim() || SA_NAMES[sym], // API العربي → الإنجليزي → السجلّ المركزي
-      float: this.floatFor(sym), // يدوي → مجلوب → افتراضي 50M
-      avgDailyVol: vol > 0 ? vol : 1_000_000, // تقريب: لا متوسط في movers (يُحسّن من /historical في Pro)
+      name: q.name?.trim() || q.name_en?.trim() || SA_NAMES[sym],
+      float: this.floatFor(sym),
+      avgDailyVol: this.avgVolFor(sym) ?? (vol > 0 ? vol : 1_000_000),
       prevClose,
-      open: price || prevClose,
-      dayHighSeed: Math.max(price, prevClose),
-      premktHigh: price || prevClose,
+      open,
+      dayHighSeed: high,
+      premktHigh: open,
       dayVolume: vol > 0 ? vol : undefined,
-      dayVwap: price || prevClose, // تقريب (لا VWAP في movers)
+      dayVwap: vwap,
     };
   }
 
+  private seedList(quotes: Map<string, Quote>): SymbolSeed[] {
+    const seeds: SymbolSeed[] = [];
+    for (const q of quotes.values()) {
+      const sym = q.symbol as string;
+      this.universe.add(sym);
+      this.lastVol.set(sym, numOr(q.volume, 0));
+      seeds.push(this.seedFromQuote(q));
+    }
+    return seeds;
+  }
+
   async prepare(): Promise<SymbolSeed[]> {
-    if (!this.isOpen()) {
-      console.warn("[SAHMK] السوق مغلق — تخطّي التهيئة (حفظ حصّة الطلبات المجانية).");
+    // Pro: نجلب لقطة واحدة حتى والسوق مغلق (لعرض آخر جلسة)؛ الاستطلاع المتكرّر يُبوَّب في poll.
+    const syms = await this.discover();
+    if (!syms.length) {
+      console.warn("[SAHMK] لا حركة الآن (سوق مغلق أو خارج أوقات التداول).");
       return [];
     }
-    const rows = await this.fetchMovers();
-    if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
-    const seeds: SymbolSeed[] = [];
-    for (const r of rows) {
-      this.lastVol.set(r.symbol as string, numOr(r.volume, 0));
-      seeds.push(this.seedFromRow(r));
-    }
-    if (!seeds.length) console.warn("[SAHMK] لا حركة الآن (سوق مغلق أو خارج أوقات التداول).");
-    return seeds;
+    await this.enrich(syms); // متوسط الحجم + الفلوت قبل البذر (ZenVR دقيق)
+    const quotes = await this.fetchQuotes(syms);
+    return this.seedList(quotes);
   }
 
   start(onTick: TickHandler, _onNews?: NewsHandler) {
     this.onTick = onTick;
-    // المجاني: استطلاع دوري للحركة (لا WebSocket). Pro لاحقاً: WebSocket لحظي.
+    void this.poll(true); // لقطة أولى فورية (حتى والسوق مغلق) لعرض آخر جلسة كاملة + السيولة
     this.timer = setInterval(() => void this.poll(), this.pollMs);
   }
 
-  private async poll() {
+  private async poll(force = false) {
     if (this.stopped || !this.onTick) return;
-    if (!this.isOpen()) return; // لا تحرق الحصّة والسوق مغلق (المؤقّت يستأنف عند الفتح)
-    const rows = await this.fetchMovers();
+    if (!force && !this.isOpen()) return; // لا استطلاع متكرّر والسوق مغلق (الداتا ثابتة)
+    const syms = [...this.universe];
+    if (!syms.length) return;
+    const quotes = await this.fetchQuotes(syms);
     const now = Date.now();
-    for (const r of rows) {
-      const sym = r.symbol as string;
-      const price = numOr(r.price, 0);
+    for (const q of quotes.values()) {
+      const sym = q.symbol as string;
+      const price = numOr(q.price, 0);
       if (price <= 0) continue;
-      const vol = numOr(r.volume, 0);
+      const vol = numOr(q.volume, 0);
       const prevVol = this.lastVol.get(sym) ?? vol;
       this.lastVol.set(sym, vol);
-      const half = Math.max(0.01, price * 0.0008) / 2;
-      this.onTick({
+      const value = numOr(q.value, 0);
+      const vwap = vol > 0 && value > 0 ? value / vol : undefined;
+      const tick: Tick = {
         symbol: sym,
         price: round(price, 2),
-        size: Math.max(1, vol - prevVol),
-        bid: round(price - half, 2),
-        ask: round(price + half, 2),
+        size: Math.max(0, vol - prevVol),
+        bid: round(numOr(q.bid, price), 2),
+        ask: round(numOr(q.ask, price), 2),
         t: now,
-      });
+        dayHigh: numOr(q.high, 0) || undefined,
+        dayLow: numOr(q.low, 0) || undefined,
+        dayVolume: vol > 0 ? vol : undefined,
+        dayVwap: vwap,
+        liquidityNet: q.liquidity?.net_value,
+      };
+      this.onTick(tick);
     }
   }
 
   async screen(maxPrice: number, limit: number): Promise<SymbolSeed[]> {
-    if (!this.isOpen()) return []; // السوق مغلق — لا فرز (حفظ الحصّة)
-    const rows = await this.fetchMovers(Math.min(50, Math.max(10, limit)));
-    if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
+    if (!this.isOpen()) return []; // السوق مغلق — لا فرز
+    const syms = await this.discover(Math.min(50, Math.max(10, limit)));
+    await this.enrich(syms); // متوسط الحجم + الفلوت للرموز الجديدة
+    const quotes = await this.fetchQuotes(syms);
     const out: SymbolSeed[] = [];
-    for (const r of rows) {
-      const price = numOr(r.price, 0);
+    for (const q of quotes.values()) {
+      const price = numOr(q.price, 0);
       if (price <= 0 || price > maxPrice) continue;
-      if (!this.lastVol.has(r.symbol as string)) this.lastVol.set(r.symbol as string, numOr(r.volume, 0));
-      out.push(this.seedFromRow(r));
+      const sym = q.symbol as string;
+      this.universe.add(sym); // ليشمله الاستطلاع الدفعي؛ onTick يأتي من poll التالي
+      if (!this.lastVol.has(sym)) this.lastVol.set(sym, numOr(q.volume, 0));
+      out.push(this.seedFromQuote(q));
     }
     return out;
   }
 
-  subscribe(_symbols: string[]) {
-    /* الحركة تُجلب كاملة في كل poll — لا اشتراك فردي في مسار REST */
+  subscribe(symbols: string[]) {
+    for (const s of symbols) this.universe.add(s); // ليشملها الاستطلاع الدفعي
+  }
+
+  // تاريخ 15د لرمز (أحدث ~120 بار) لسياق الشارت — 15min متاح على Pro (1min يتطلب Enterprise)
+  async history(sym: string): Promise<OHLCV[]> {
+    const d = await this.get<{ data?: HistBar[] }>(`/historical/${sym}/?interval=15min&limit=500`);
+    const bars: OHLCV[] = [];
+    for (const b of d?.data ?? []) {
+      const t = Date.parse(b.date ?? "");
+      const c = numOr(b.close, 0);
+      if (!Number.isFinite(t) || c <= 0) continue;
+      bars.push({ t, o: numOr(b.open, c), h: numOr(b.high, c), l: numOr(b.low, c), c, v: numOr(b.volume, 0) });
+    }
+    bars.sort((a, b) => a.t - b.t); // تصاعدي زمنياً (الـ API يرجّع من الأقدم)
+    return bars.slice(-120); // أحدث ~120 بار (≈6 أيام تداول)
   }
 
   stop() {

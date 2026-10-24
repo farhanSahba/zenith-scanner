@@ -126,6 +126,7 @@ export class ScannerEngine {
   private adapter: MarketAdapter;
   private provider: string;
   private states = new Map<string, SymbolState>();
+  private backfilled = new Set<string>(); // رموز عُبّئ شارتها من التاريخ الحقيقي (مرة واحدة)
   private alertEngine: AlertEngine;
   private perf = new PerfTracker();
   private tgSent = new Set<string>(); // تنبيهات أُرسلت للجوال (منع التكرار)
@@ -343,6 +344,8 @@ export class ScannerEngine {
     const sessionProgress =
       this.provider === "sim"
         ? Math.max(0.05, Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05))
+        : phase === "closed"
+        ? 1 // سوق مغلق: الحجم يمثّل جلسة كاملة → توقّع كامل (ZenVR = RVOL الحقيقي، لا تضخّم)
         : this.market.sessionFraction(now);
 
     // رموز عليها خبر طرح/تخفيف حديث (لإظهار شارة التحذير على صفّها)
@@ -446,15 +449,38 @@ export class ScannerEngine {
     if (this.tgSent.size > 5000) this.tgSent = new Set([...this.tgSent].slice(-2000));
   }
 
-  // بيانات الرسم: بارات 1د + مجمّعة 15د
+  // جلب تاريخ 15د الحقيقي لرمز (مرة واحدة، عند أول عرض) — لسياق إطار الـ15د
+  private async backfillOne(sym: string) {
+    const st = this.states.get(sym);
+    if (!this.adapter.history || !st) return;
+    try {
+      const bars = await this.adapter.history(sym); // استدعاء على المحوّل (يحفظ ربط this)
+      if (bars.length) st.hist15 = bars;
+    } catch {
+      /* تجاهل أخطاء التعبئة */
+    }
+  }
+
   getChart(sym: string): { bars1: OHLCV[]; bars15: OHLCV[]; meta: ChartMeta } | null {
-    const st = this.states.get(sym.toUpperCase());
+    const su = sym.toUpperCase();
+    const st = this.states.get(su);
     if (!st) return null;
+    // تعبئة كسولة: فقط للرمز الذي يفتحه المستخدم (أوفر من تعبئة كل الكون)
+    if (this.adapter.history && !this.backfilled.has(su)) {
+      this.backfilled.add(su);
+      void this.backfillOne(su);
+    }
     const bars1 = st.barsForChart();
-    const snap = this.symSnaps.get(sym.toUpperCase());
+    const live15 = aggregate(bars1, 15);
+    // ادمج تاريخ 15د الحقيقي (السعودي Pro) قبل بارات اليوم الحيّة
+    const firstLive = live15.length ? live15[0].t : Infinity;
+    const bars15 = st.hist15.length
+      ? [...st.hist15.filter((b) => b.t < firstLive), ...live15]
+      : live15;
+    const snap = this.symSnaps.get(su);
     return {
       bars1,
-      bars15: aggregate(bars1, 15),
+      bars15,
       meta: {
         symbol: st.symbol,
         name: st.name,
@@ -466,6 +492,7 @@ export class ScannerEngine {
         atr: st.atr(ATR_PERIOD),
         float: st.float,
         changePct: snap?.changePct ?? st.changePct(),
+        liquidityNet: st.liquidityNet,
       },
     };
   }
@@ -496,6 +523,7 @@ export interface ChartMeta {
   atr: number;
   float: number;
   changePct: number;
+  liquidityNet?: number; // صافي تدفّق السيولة (السعودي Pro)
 }
 
 // ===== مساعدات =====

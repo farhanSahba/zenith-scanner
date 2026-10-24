@@ -144,6 +144,7 @@ export function buildSymbolSnapshot(
     atrSprd,
     floatRot,
     atrReliable,
+    liquidityNet: s.liquidityNet,
     spread,
     bid: s.bid,
     ask: s.ask,

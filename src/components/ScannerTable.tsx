@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import type { SymbolSnapshot } from "@/engine/types";
 import { levelText, levelBg } from "@/lib/levels";
-import { fmtPrice, fmtVol } from "@/lib/format";
+import { fmtPrice, fmtVol, fmtFlow } from "@/lib/format";
 import { useLang, type TKey } from "@/lib/i18n";
 
 // أعمدة قابلة للترجمة
@@ -13,6 +13,7 @@ const TRANS: Record<string, TKey> = {
   gap: "colGap",
   float: "colFloat",
   twoMin: "col2Min",
+  flow: "colFlow",
 };
 // مصطلحات الماسح المختصرة (تبقى كما هي في اللغتين)
 const FIXED: Record<string, string> = {
@@ -142,6 +143,19 @@ function Cell({ col, s }: { col: string; s: SymbolSnapshot }) {
     return (
       <td className="px-1.5 py-[3px] text-right text-sky-300">
         {fmtVol(s.volume)}
+      </td>
+    );
+  }
+  if (col === "flow") {
+    const f = s.liquidityNet;
+    return (
+      <td
+        className={clsx(
+          "px-1.5 py-[3px] text-right",
+          f == null ? "text-slate-600" : f >= 0 ? "text-neon-green/80" : "text-neon-red/80"
+        )}
+      >
+        {f == null ? "—" : fmtFlow(f)}
       </td>
     );
   }

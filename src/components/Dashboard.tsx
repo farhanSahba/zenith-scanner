@@ -24,6 +24,9 @@ const PANELS: { key: PanelKey; titleKey: TKey; accent: string; cols: string[] }[
   { key: "momo2mDown", titleKey: "panelMomoDown", accent: "#ff2d55", cols: ["name", "price", "twoMin", "volume", "zenVR", "zenP", "atrVwap", "atrHoD"] },
 ];
 
+// لوحات تعرض عمود تدفّق السيولة (السعودي Pro)
+const FLOW_PANELS = new Set<PanelKey>(["momoHod", "momo2mUp", "momo2mDown"]);
+
 export default function Dashboard({ market }: { market: MarketId }) {
   return (
     <LangProvider>
@@ -109,21 +112,26 @@ function DashboardInner({ market }: { market: MarketId }) {
       <main className="flex-1 min-h-0 flex flex-col gap-2 p-2">
         <section className="flex gap-2" style={{ height: "45%" }}>
           <div className="flex-1 grid grid-cols-2 xl:grid-cols-3 grid-rows-2 gap-2 min-w-0">
-            {PANELS.map((p) => (
-              <Panel
-                key={p.key}
-                title={t(p.titleKey)}
-                accent={p.accent}
-                badge={<span className="text-slate-600 text-[10px]">{snap?.panels[p.key]?.length ?? 0}</span>}
-              >
-                <ScannerTable
-                  rows={snap?.panels[p.key] ?? []}
-                  cols={p.cols}
-                  selected={selected ?? undefined}
-                  onSelect={setSelected}
-                />
-              </Panel>
-            ))}
+            {PANELS.map((p) => {
+              // عمود تدفّق السيولة للسوق السعودي (Pro) في لوحات الزخم
+              const cols =
+                market === "sa" && FLOW_PANELS.has(p.key) ? [...p.cols, "flow"] : p.cols;
+              return (
+                <Panel
+                  key={p.key}
+                  title={t(p.titleKey)}
+                  accent={p.accent}
+                  badge={<span className="text-slate-600 text-[10px]">{snap?.panels[p.key]?.length ?? 0}</span>}
+                >
+                  <ScannerTable
+                    rows={snap?.panels[p.key] ?? []}
+                    cols={cols}
+                    selected={selected ?? undefined}
+                    onSelect={setSelected}
+                  />
+                </Panel>
+              );
+            })}
           </div>
 
           <div className="w-[340px] shrink-0">
