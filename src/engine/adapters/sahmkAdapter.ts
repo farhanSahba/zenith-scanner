@@ -1,3 +1,4 @@
+import { SA_NAMES } from "../saNames";
 import type { Tick } from "../types";
 import type { MarketAdapter, NewsHandler, SymbolSeed, TickHandler } from "./types";
 
@@ -132,7 +133,7 @@ export class SahmkAdapter implements MarketAdapter {
     const vol = numOr(r.volume, 0);
     return {
       symbol: sym,
-      name: (r.name?.trim() || r.name_en?.trim()) ?? undefined, // الاسم العربي، وإلا الإنجليزي
+      name: r.name?.trim() || r.name_en?.trim() || SA_NAMES[sym], // API العربي → الإنجليزي → السجلّ المركزي
       float: this.floatFor(sym), // يدوي → مجلوب → افتراضي 50M
       avgDailyVol: vol > 0 ? vol : 1_000_000, // تقريب: لا متوسط في movers (يُحسّن من /historical في Pro)
       prevClose,

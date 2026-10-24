@@ -7,6 +7,7 @@ import { classify } from "./scanner";
 import { AlertEngine } from "./alerts";
 import { PerfTracker } from "./perf";
 import { sendTelegram, telegramEnabled } from "./notify";
+import { SA_NAMES } from "./saNames";
 import type { MarketConfig } from "./markets";
 import type {
   Alert,
@@ -60,8 +61,9 @@ function fmtM(n: number): string {
 
 // نص رسالة Telegram لتنبيه — عنوان مميّز + بيانات + سطر تنفيذي + وقت ورابط الشارت (حسب السوق).
 function formatTg(a: Alert, s: SymbolSnapshot | undefined, market: MarketConfig): string {
-  // الرمز + اسم الشركة إن توفّر (السوق السعودي)
-  const sym = s?.name ? `<b>${a.symbol}</b> ${s.name}` : `<b>${a.symbol}</b>`;
+  // الرمز + اسم الشركة إن توفّر (من اللقطة، واحتياطاً من السجلّ المركزي للسعودي)
+  const nm = s?.name ?? (market.id === "sa" ? SA_NAMES[a.symbol] : undefined);
+  const sym = nm ? `<b>${a.symbol}</b> ${nm}` : `<b>${a.symbol}</b>`;
   const price = `${a.price} ${market.currency}`;
   const num = () => {
     const n = parseFloat(a.reason.match(/[+-]?[\d.]+/)?.[0] ?? "0");
@@ -263,6 +265,7 @@ export class ScannerEngine {
           const newAlerts: Alert[] = cand.map(({ s, gap }) => ({
             id: `${s.symbol}-new-${now}`,
             symbol: s.symbol,
+            name: this.nameOf(s.symbol),
             reason: `مرشّح جديد +${gap.toFixed(0)}%`,
             kind: "new",
             tier: "early",
@@ -287,6 +290,11 @@ export class ScannerEngine {
     st.onTick(tick, phase);
   }
 
+  // اسم الشركة من الرمز: اسم الحالة (من المزوّد) → السجلّ المركزي للسعودي
+  private nameOf(sym: string): string | undefined {
+    return this.states.get(sym)?.name ?? (this.market.id === "sa" ? SA_NAMES[sym] : undefined);
+  }
+
   private onNews(ev: NewsEvent) {
     const id = ev.url || `${ev.symbol}-${ev.time}`;
     if (this.news.some((n) => n.id === id)) return; // تجنّب التكرار
@@ -294,6 +302,7 @@ export class ScannerEngine {
     const item: NewsItem = {
       id,
       symbol: ev.symbol,
+      name: this.nameOf(ev.symbol),
       time: ev.time,
       headline: ev.headline,
       source: ev.source,
@@ -312,6 +321,7 @@ export class ScannerEngine {
       const a: Alert = {
         id: `dilution-${item.id}`,
         symbol: item.symbol,
+        name: this.nameOf(item.symbol),
         reason: "تخفيف/طرح",
         kind: "dilution",
         tier: "trigger",
@@ -352,6 +362,7 @@ export class ScannerEngine {
     // تنبيهات جديدة من كل الكون (لا تنبيهات والسوق مغلق)
     const fresh = this.alertEngine.update(all, now, phase);
     if (fresh.length) {
+      for (const a of fresh) a.name = this.nameOf(a.symbol); // اسم الشركة للعرض
       this.alerts = [...fresh.reverse(), ...this.alerts].slice(0, ALERTS_CAP);
     }
 
@@ -412,7 +423,8 @@ export class ScannerEngine {
 
   // إحصاءات أداء التنبيهات + آخر النتائج
   getPerf() {
-    return { stats: this.perf.stats(), recent: this.perf.recent(40) };
+    const recent = this.perf.recent(40).map((e) => ({ ...e, name: this.nameOf(e.symbol) }));
+    return { stats: this.perf.stats(), recent };
   }
 
   // يرسل التنبيهات المهمّة للجوال عبر Telegram (مرة لكل تنبيه، تهدئة 2د لكل رمز).

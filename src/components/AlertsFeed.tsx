@@ -38,13 +38,20 @@ export default function AlertsFeed({
               onClick={() => onSelect(a.symbol)}
               className="cursor-pointer border-b border-base-800 hover:bg-base-700/40"
             >
-              <td
-                className={clsx(
-                  "px-1.5 py-[3px] text-left font-bold",
-                  a.tone === "bull" ? "text-neon-green" : a.tone === "bear" ? "text-neon-red" : "text-slate-200"
+              <td className="px-1.5 py-[3px] text-left whitespace-nowrap">
+                <span
+                  className={clsx(
+                    "font-bold",
+                    a.tone === "bull" ? "text-neon-green" : a.tone === "bear" ? "text-neon-red" : "text-slate-200"
+                  )}
+                >
+                  {a.symbol}
+                </span>
+                {a.name && (
+                  <span className="block text-[9px] text-slate-500 font-normal leading-tight truncate max-w-[90px]" dir="rtl" title={a.name}>
+                    {a.name}
+                  </span>
                 )}
-              >
-                {a.symbol}
               </td>
               <td
                 className={clsx(

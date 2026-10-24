@@ -57,6 +57,11 @@ export default function NewsPanel({
               >
                 {n.symbol}
               </button>
+              {n.name && (
+                <span className="text-slate-400 text-[11px] truncate max-w-[110px]" dir="rtl" title={n.name}>
+                  {n.name}
+                </span>
+              )}
               <span className="text-slate-600 text-[10px] tnum">{fmtClockLocal(n.time)}</span>
               <span className="text-slate-600 text-[10px]">· {n.source}</span>
               {n.sentiment && (

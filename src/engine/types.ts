@@ -26,6 +26,7 @@ export type SessionPhase = "pre" | "regular" | "after" | "overnight" | "closed";
 export interface NewsItem {
   id: string;
   symbol: string;
+  name?: string; // اسم الشركة (السوق السعودي)
   time: number;
   headline: string;
   source: string;
@@ -93,6 +94,7 @@ export type AlertTier = "early" | "trigger" | "confirm";
 export interface Alert {
   id: string;
   symbol: string;
+  name?: string; // اسم الشركة (السوق السعودي)
   reason: string; // "To HoD" | "+11.6% /2Min" | ...
   kind?: AlertKind;
   tier?: AlertTier; // "early" = إشارات الصقر المبكرة (تُخفى في الوضع الهادئ)

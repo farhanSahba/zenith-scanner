@@ -13,6 +13,7 @@ interface Agg {
 interface PerfEntry {
   id: string;
   symbol: string;
+  name?: string;
   kind: string;
   tone: "bull" | "bear";
   price: number;
@@ -149,7 +150,14 @@ export default function PerfPanel({ market }: { market: string }) {
         <tbody>
           {data!.recent.map((e) => (
             <tr key={e.id} className="border-t border-base-800">
-              <td className="px-1 py-[3px] text-left font-bold text-slate-200">{e.symbol}</td>
+              <td className="px-1 py-[3px] text-left whitespace-nowrap">
+                <span className="font-bold text-slate-200">{e.symbol}</span>
+                {e.name && (
+                  <span className="text-slate-500 text-[10px] ms-1" dir="rtl" title={e.name}>
+                    {e.name}
+                  </span>
+                )}
+              </td>
               <td className="px-1 py-[3px] text-left text-slate-400">{kindLabel(e.kind)}</td>
               <td
                 className={clsx(

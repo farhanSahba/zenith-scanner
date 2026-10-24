@@ -1,4 +1,5 @@
 import { TICK_MS } from "../const";
+import { SA_NAMES } from "../saNames";
 import type { Tick } from "../types";
 import type {
   MarketAdapter,
@@ -49,49 +50,10 @@ function weightedChar(): Character {
   return "chop";
 }
 
-// كون سعودي واقعي للمحاكاة: رموز تداول حقيقية بأسمائها العربية (أكثر الأسماء سيولة)
-const SA_UNIVERSE: { sym: string; name: string }[] = [
-  { sym: "2222", name: "أرامكو السعودية" },
-  { sym: "1120", name: "مصرف الراجحي" },
-  { sym: "1180", name: "البنك الأهلي السعودي" },
-  { sym: "1010", name: "بنك الرياض" },
-  { sym: "1020", name: "بنك الجزيرة" },
-  { sym: "1080", name: "البنك العربي الوطني" },
-  { sym: "1140", name: "بنك البلاد" },
-  { sym: "1150", name: "مصرف الإنماء" },
-  { sym: "1060", name: "ساب" },
-  { sym: "1050", name: "البنك السعودي الفرنسي" },
-  { sym: "2010", name: "سابك" },
-  { sym: "2020", name: "سابك للمغذيات الزراعية" },
-  { sym: "2350", name: "كيان السعودية" },
-  { sym: "2290", name: "ينساب" },
-  { sym: "1211", name: "معادن" },
-  { sym: "2060", name: "التصنيع" },
-  { sym: "2050", name: "صافولا" },
-  { sym: "2280", name: "المراعي" },
-  { sym: "7010", name: "إس تي سي" },
-  { sym: "7020", name: "اتحاد اتصالات (موبايلي)" },
-  { sym: "7030", name: "زين السعودية" },
-  { sym: "7203", name: "علم" },
-  { sym: "7202", name: "سلوشنز" },
-  { sym: "4190", name: "جرير" },
-  { sym: "4003", name: "إكسترا" },
-  { sym: "4001", name: "أسواق العثيم" },
-  { sym: "4002", name: "المواساة" },
-  { sym: "4004", name: "دله الصحية" },
-  { sym: "4300", name: "دار الأركان" },
-  { sym: "3030", name: "أسمنت السعودية" },
-  { sym: "3040", name: "أسمنت القصيم" },
-  { sym: "3020", name: "أسمنت اليمامة" },
-  { sym: "3010", name: "الأسمنت العربية" },
-  { sym: "8010", name: "التعاونية" },
-  { sym: "8210", name: "بوبا العربية" },
-  { sym: "6010", name: "نادك" },
-  { sym: "5110", name: "كهرباء السعودية" },
-  { sym: "4030", name: "البحري" },
-  { sym: "4040", name: "سابتكو" },
-  { sym: "6002", name: "هرفي" },
-];
+// كون سعودي واقعي للمحاكاة: رموز تداول حقيقية بأسمائها من السجلّ المركزي
+const SA_UNIVERSE: { sym: string; name: string }[] = Object.entries(SA_NAMES).map(
+  ([sym, name]) => ({ sym, name })
+);
 
 function shuffled<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -125,12 +87,14 @@ function buildSeeds(count: number, profile: SimProfile): SymbolSeed[] {
   const seeds: SymbolSeed[] = [];
   const used = new Set<string>();
   const sa = profile === "sa";
-  // السعودي: اسحب من كون تداول الحقيقي (رمز + اسم)؛ الزائد عن القائمة = أرقام عشوائية
+  // السعودي: اسحب من كون تداول الحقيقي (رمز + اسم)، ولا تتجاوز حجم القائمة
+  // حتى لا يظهر أي رمز سعودي بلا اسم في المحاكاة.
   const saPool = sa ? shuffled(SA_UNIVERSE) : [];
-  for (let i = 0; i < count; i++) {
+  const total = sa ? Math.min(count, saPool.length) : count;
+  for (let i = 0; i < total; i++) {
     let symbol: string;
     let name: string | undefined;
-    if (sa && i < saPool.length) {
+    if (sa) {
       symbol = saPool[i].sym;
       name = saPool[i].name;
       used.add(symbol);
