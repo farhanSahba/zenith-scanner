@@ -125,4 +125,5 @@ export interface Snapshot {
   universeCount: number;
   dataSource: string; // "sim" | "alpaca"
   note?: string; // تنبيه حالة (مثل الرجوع للمحاكاة)
+  telegram?: boolean; // إشعارات Telegram مفعّلة؟
 }

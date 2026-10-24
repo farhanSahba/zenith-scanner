@@ -68,6 +68,14 @@ export default function TopBar({
         <span className="text-[10px] text-slate-600">
           · {snap?.universeCount ?? 0} {t("symbols")}
         </span>
+        {snap?.telegram && (
+          <span
+            className="text-[10px] px-1.5 py-[2px] rounded border text-neon-cyan border-neon-cyan/40 bg-neon-cyan/10"
+            title={t("tgOn")}
+          >
+            📱 Telegram
+          </span>
+        )}
       </div>
 
       {snap?.note && (

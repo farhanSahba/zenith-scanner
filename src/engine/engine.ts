@@ -6,6 +6,7 @@ import { buildSymbolSnapshot } from "./snapshot";
 import { classify } from "./scanner";
 import { AlertEngine } from "./alerts";
 import { PerfTracker } from "./perf";
+import { sendTelegram, telegramEnabled } from "./notify";
 import { marketClock, msToAhClose, phaseFor, sessionFraction } from "./clock";
 import type {
   Alert,
@@ -36,12 +37,30 @@ function isDilutionNews(n: NewsItem): boolean {
   return n.sentiment === "dilution" || DILUTION_RE.test(n.headline);
 }
 
+// نص رسالة Telegram لتنبيه (أيقونة حسب النوع + الرمز + السبب + السعر)
+const TG_ICON: Record<string, string> = {
+  toHod: "🔔",
+  up2m: "📈",
+  down2m: "📉",
+  dilution: "⚠️",
+  surge: "⚡",
+  approachHod: "🦅",
+  new: "✨",
+};
+function formatTg(a: Alert): string {
+  const em = TG_ICON[a.kind ?? ""] ?? "•";
+  const warn = a.warning ? ` ${a.warning}` : "";
+  return `${em} <b>${a.symbol}</b> — ${a.reason}${warn}\nالسعر: ${a.price}`;
+}
+
 export class ScannerEngine {
   private adapter: MarketAdapter;
   private provider: string;
   private states = new Map<string, SymbolState>();
   private alertEngine = new AlertEngine();
   private perf = new PerfTracker();
+  private tgSent = new Set<string>(); // تنبيهات أُرسلت للجوال (منع التكرار)
+  private tgLast = new Map<string, number>(); // آخر إرسال لكل رمز (تهدئة)
 
   private symSnaps = new Map<string, SymbolSnapshot>();
   private latest: Snapshot | null = null;
@@ -270,6 +289,9 @@ export class ScannerEngine {
     this.perf.record(this.alerts);
     this.perf.update(this.symSnaps, now);
 
+    // إشعارات الجوال: المهمّ فقط (لحظة الدخول + التخفيف)، مع تهدئة لكل رمز
+    this.pushTelegram(now);
+
     // عقود آجلة تتحرّك ببطء
     this.futures.dj = clamp(this.futures.dj + (Math.random() - 0.5) * 0.05, -3, 3);
     this.futures.sp = clamp(this.futures.sp + (Math.random() - 0.5) * 0.04, -3, 3);
@@ -286,6 +308,7 @@ export class ScannerEngine {
       universeCount: this.states.size,
       dataSource: this.provider,
       note: this.note || undefined,
+      telegram: telegramEnabled(),
     };
   }
 
@@ -318,6 +341,23 @@ export class ScannerEngine {
   // إحصاءات أداء التنبيهات + آخر النتائج
   getPerf() {
     return { stats: this.perf.stats(), recent: this.perf.recent(40) };
+  }
+
+  // يرسل التنبيهات المهمّة للجوال عبر Telegram (مرة لكل تنبيه، تهدئة 2د لكل رمز).
+  private pushTelegram(now: number) {
+    if (!telegramEnabled()) return;
+    for (const a of this.alerts) {
+      if (this.tgSent.has(a.id)) continue;
+      this.tgSent.add(a.id);
+      if (now - a.time > 60_000) continue; // قديم (بعد إعادة التشغيل) — لا ترسل
+      const important = a.tier === "trigger" || a.kind === "dilution"; // لحظة الدخول + التحذير
+      if (!important) continue;
+      const last = this.tgLast.get(a.symbol) ?? 0;
+      if (now - last < 120_000) continue; // تهدئة لكل رمز لمنع إزعاج الجوال
+      this.tgLast.set(a.symbol, now);
+      void sendTelegram(formatTg(a));
+    }
+    if (this.tgSent.size > 5000) this.tgSent = new Set([...this.tgSent].slice(-2000));
   }
 
   // بيانات الرسم: بارات 1د + مجمّعة 15د
