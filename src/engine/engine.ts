@@ -5,6 +5,7 @@ import { SymbolState } from "./symbolState";
 import { buildSymbolSnapshot } from "./snapshot";
 import { classify } from "./scanner";
 import { AlertEngine } from "./alerts";
+import { PerfTracker } from "./perf";
 import { marketClock, msToAhClose, phaseFor, sessionFraction } from "./clock";
 import type {
   Alert,
@@ -40,6 +41,7 @@ export class ScannerEngine {
   private provider: string;
   private states = new Map<string, SymbolState>();
   private alertEngine = new AlertEngine();
+  private perf = new PerfTracker();
 
   private symSnaps = new Map<string, SymbolSnapshot>();
   private latest: Snapshot | null = null;
@@ -106,6 +108,9 @@ export class ScannerEngine {
     this.snapTimer = setInterval(() => this.buildSnapshot(), SNAPSHOT_MS);
     this.buildSnapshot();
     this.running = true;
+
+    // حفظ دوري لسجل الأداء على القرص (ينجو من إعادة التشغيل)
+    setInterval(() => this.perf.save(), 15_000);
 
     // فرز تلقائي حيّ: يضيف مرشّحي السوق الجدد دون إعادة تشغيل
     if (this.adapter.screen && (process.env.ALPACA_AUTOSCREEN ?? "on").toLowerCase() !== "off") {
@@ -261,6 +266,10 @@ export class ScannerEngine {
       this.alerts = [...fresh.reverse(), ...this.alerts].slice(0, ALERTS_CAP);
     }
 
+    // تتبّع الأداء: سجّل كل التنبيهات وقِس نتائجها من الأسعار الحالية
+    this.perf.record(this.alerts);
+    this.perf.update(this.symSnaps, now);
+
     // عقود آجلة تتحرّك ببطء
     this.futures.dj = clamp(this.futures.dj + (Math.random() - 0.5) * 0.05, -3, 3);
     this.futures.sp = clamp(this.futures.sp + (Math.random() - 0.5) * 0.04, -3, 3);
@@ -304,6 +313,11 @@ export class ScannerEngine {
 
   getNews(): NewsItem[] {
     return this.news;
+  }
+
+  // إحصاءات أداء التنبيهات + آخر النتائج
+  getPerf() {
+    return { stats: this.perf.stats(), recent: this.perf.recent(40) };
   }
 
   // بيانات الرسم: بارات 1د + مجمّعة 15د

@@ -12,6 +12,7 @@ import AlertsFeed from "@/components/AlertsFeed";
 import ChartsArea from "@/components/ChartsArea";
 import AiConsole from "@/components/AiConsole";
 import NewsPanel from "@/components/NewsPanel";
+import PerfPanel from "@/components/PerfPanel";
 
 // تعريف اللوحات وأعمدتها (العنوان عبر مفتاح ترجمة)
 const PANELS: {
@@ -66,7 +67,7 @@ function Dashboard() {
   const [selected, setSelected] = useState<string | null>(null);
   const [tts, setTts] = useState(false);
   const [hawk, setHawk] = useState(true);
-  const [tab, setTab] = useState<"ai" | "news">("ai");
+  const [tab, setTab] = useState<"ai" | "news" | "perf">("ai");
   const lastSpoken = useRef<string | null>(null);
 
   // استرجاع تفضيل وضع الصقر (افتراضياً مُفعّل)
@@ -193,12 +194,17 @@ function Dashboard() {
               <TabBtn active={tab === "news"} onClick={() => setTab("news")}>
                 {t("newsTab")} {snap?.news.length ? `(${snap.news.length})` : ""}
               </TabBtn>
+              <TabBtn active={tab === "perf"} onClick={() => setTab("perf")}>
+                {t("perfTab")}
+              </TabBtn>
             </div>
             <div className="flex-1 min-h-0">
               {tab === "ai" ? (
                 <AiConsole onSelect={setSelected} />
-              ) : (
+              ) : tab === "news" ? (
                 <NewsPanel news={snap?.news ?? []} onSelect={setSelected} />
+              ) : (
+                <PerfPanel />
               )}
             </div>
           </div>
