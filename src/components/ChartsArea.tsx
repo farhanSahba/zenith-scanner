@@ -13,7 +13,7 @@ interface ChartData {
   meta: ChartMeta;
 }
 
-export default function ChartsArea({ symbol }: { symbol: string | null }) {
+export default function ChartsArea({ symbol, market }: { symbol: string | null; market: string }) {
   const { t } = useLang();
   const [data, setData] = useState<ChartData | null>(null);
   const [narr, setNarr] = useState<{ loading: boolean; text?: string; ai?: boolean }>({
@@ -31,7 +31,7 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
     let active = true;
     const load = async () => {
       try {
-        const res = await fetch(`/api/chart?symbol=${encodeURIComponent(symbol)}`);
+        const res = await fetch(`/api/chart?symbol=${encodeURIComponent(symbol)}&market=${market}`);
         if (!res.ok) return;
         const d = (await res.json()) as ChartData;
         if (active && symRef.current === symbol) setData(d);
@@ -45,13 +45,14 @@ export default function ChartsArea({ symbol }: { symbol: string | null }) {
       active = false;
       clearInterval(t);
     };
-  }, [symbol]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, market]);
 
   async function readSetup() {
     if (!symbol) return;
     setNarr({ loading: true });
     try {
-      const res = await fetch("/api/ai", {
+      const res = await fetch(`/api/ai?market=${market}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "narrate", symbol }),

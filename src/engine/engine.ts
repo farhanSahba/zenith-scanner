@@ -7,7 +7,7 @@ import { classify } from "./scanner";
 import { AlertEngine } from "./alerts";
 import { PerfTracker } from "./perf";
 import { sendTelegram, telegramEnabled } from "./notify";
-import { marketClock, msToAhClose, phaseFor, sessionFraction } from "./clock";
+import type { MarketConfig } from "./markets";
 import type {
   Alert,
   NewsItem,
@@ -122,7 +122,7 @@ export class ScannerEngine {
   private adapter: MarketAdapter;
   private provider: string;
   private states = new Map<string, SymbolState>();
-  private alertEngine = new AlertEngine();
+  private alertEngine: AlertEngine;
   private perf = new PerfTracker();
   private tgSent = new Set<string>(); // تنبيهات أُرسلت للجوال (منع التكرار)
   private tgLast = new Map<string, number>(); // آخر إرسال لكل رمز (تهدئة)
@@ -141,11 +141,12 @@ export class ScannerEngine {
   private initPromise: Promise<void> | null = null;
   private screenedOnce = false; // أول فرز = بناء الكون الأولي (لا تنبيهات «مرشّح جديد»)
 
-  constructor() {
-    const requested = (process.env.DATA_PROVIDER ?? "sim").toLowerCase();
-    this.adapter = createAdapter();
+  constructor(private market: MarketConfig) {
+    const requested = (process.env[market.providerEnv] ?? "sim").toLowerCase();
+    this.adapter = createAdapter(market);
     this.provider = this.adapter.name; // المصدر الفعلي (قد يرجع للمحاكاة)
-    if (requested === "alpaca" && this.adapter.name !== "alpaca") {
+    this.alertEngine = new AlertEngine(market.alerts); // عتبات السوق
+    if (market.id === "us" && requested === "alpaca" && this.adapter.name !== "alpaca") {
       this.note = "مفاتيح Alpaca ناقصة أو غير صالحة — رجوع تلقائي للمحاكاة.";
     }
   }
@@ -210,7 +211,7 @@ export class ScannerEngine {
   private async refreshUniverse(maxPrice: number, limit: number) {
     const adapter = this.adapter;
     if (!adapter.screen || !adapter.subscribe) return;
-    if (phaseFor(this.provider, Date.now()) === "closed") return; // لا فرز والسوق مغلق
+    if (this.market.phaseFor(this.provider, Date.now()) === "closed") return; // لا فرز والسوق مغلق
     const MAX_UNIVERSE = 150;
     try {
       const seeds = await adapter.screen(maxPrice, limit);
@@ -278,7 +279,7 @@ export class ScannerEngine {
   private onTick(tick: Tick) {
     const st = this.states.get(tick.symbol);
     if (!st) return;
-    const phase = phaseFor(this.provider, tick.t);
+    const phase = this.market.phaseFor(this.provider, tick.t);
     st.onTick(tick, phase);
   }
 
@@ -321,14 +322,14 @@ export class ScannerEngine {
 
   private buildSnapshot() {
     const now = Date.now();
-    const phase = phaseFor(this.provider, now);
+    const phase = this.market.phaseFor(this.provider, now);
     // المقام في ZenVR = متوسط حجم اليوم × تقدّم الجلسة.
     // المحاكاة: تقدّم مبني على وقت تشغيل المحرّك (جلسة صناعية تبدأ عند الإقلاع).
     // الحقيقي: نسبة نهار التداول الفعلي من ساعة السوق (لا وقت التشغيل).
     const sessionProgress =
       this.provider === "sim"
         ? Math.max(0.05, Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05))
-        : sessionFraction(now);
+        : this.market.sessionFraction(now);
 
     // رموز عليها خبر طرح/تخفيف حديث (لإظهار شارة التحذير على صفّها)
     const dilutionSyms = new Set<string>();
@@ -342,7 +343,7 @@ export class ScannerEngine {
       all.push(snap);
     }
 
-    const panels = classify(all);
+    const panels = classify(all, this.market.presets);
 
     // تنبيهات جديدة من كل الكون (لا تنبيهات والسوق مغلق)
     const fresh = this.alertEngine.update(all, now, phase);
@@ -364,14 +365,15 @@ export class ScannerEngine {
     this.latest = {
       phase,
       clock: now,
-      marketClock: marketClock(now),
-      toAhCloseMs: msToAhClose(now),
+      marketClock: this.market.marketClock(now),
+      toAhCloseMs: this.market.toCloseMs(now),
       panels,
       alerts: this.alerts,
       news: this.news,
       futures: { dj: round(this.futures.dj, 2), sp: round(this.futures.sp, 2) },
       universeCount: this.states.size,
       dataSource: this.provider,
+      market: this.market.id,
       note: this.note || undefined,
       telegram: telegramEnabled() && (this.provider !== "sim" || process.env.TELEGRAM_SIM === "on"),
     };
@@ -380,16 +382,17 @@ export class ScannerEngine {
   getSnapshot(): Snapshot {
     return (
       this.latest ?? {
-        phase: "regular",
+        phase: "closed",
         clock: Date.now(),
-        marketClock: marketClock(Date.now()),
-        toAhCloseMs: msToAhClose(Date.now()),
+        marketClock: this.market.marketClock(Date.now()),
+        toAhCloseMs: this.market.toCloseMs(Date.now()),
         panels: { momoHod: [], gapUp: [], gapUpLowFloat: [], momo2mUp: [], momo2mDown: [] },
         alerts: [],
         news: [],
         futures: { dj: 0, sp: 0 },
         universeCount: 0,
         dataSource: this.provider,
+        market: this.market.id,
         note: this.note || undefined,
       }
     );

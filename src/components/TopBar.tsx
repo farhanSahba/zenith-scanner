@@ -11,6 +11,7 @@ export default function TopBar({
   onToggleTts,
   hawk,
   onToggleHawk,
+  market,
 }: {
   snap: Snapshot | null;
   connected: boolean;
@@ -18,8 +19,11 @@ export default function TopBar({
   onToggleTts: () => void;
   hawk: boolean;
   onToggleHawk: () => void;
+  market: string;
 }) {
   const { t, toggle, lang } = useLang();
+  const flag = market === "sa" ? "🇸🇦" : "🇺🇸";
+  const marketName = t(market === "sa" ? "marketSA" : "marketUS");
   const fut = snap?.futures ?? { dj: 0, sp: 0 };
 
   const phaseKey: Record<SessionPhase, string> = {
@@ -43,6 +47,17 @@ export default function TopBar({
           <div className="text-[10px] text-slate-500">{t("subtitle")}</div>
         </div>
       </div>
+
+      {/* السوق النشط + تبديل */}
+      <a
+        href="/"
+        className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40"
+        title={t("markets")}
+      >
+        <span>{flag}</span>
+        <span className="font-bold">{marketName}</span>
+        <span className="text-slate-600">⇄</span>
+      </a>
 
       {/* مصدر الداتا + حالة الاتصال */}
       <div className="flex items-center gap-2">

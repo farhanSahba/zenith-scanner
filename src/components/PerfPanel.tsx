@@ -37,7 +37,7 @@ const KIND_KEY: Record<string, TKey> = {
   dilution: "reasonDilution",
 };
 
-export default function PerfPanel() {
+export default function PerfPanel({ market }: { market: string }) {
   const { t, lang } = useLang();
   const [data, setData] = useState<PerfData | null>(null);
 
@@ -45,7 +45,7 @@ export default function PerfPanel() {
     let active = true;
     const load = async () => {
       try {
-        const d = (await fetch("/api/perf").then((r) => r.json())) as PerfData;
+        const d = (await fetch(`/api/perf?market=${market}`).then((r) => r.json())) as PerfData;
         if (active) setData(d);
       } catch {
         /* تجاهل */
@@ -57,7 +57,7 @@ export default function PerfPanel() {
       active = false;
       clearInterval(id);
     };
-  }, []);
+  }, [market]);
 
   const kindLabel = (k: string) =>
     KIND_KEY[k] ? t(KIND_KEY[k]) : k === "up2m" ? "2Min ↑" : k === "down2m" ? "2Min ↓" : k;

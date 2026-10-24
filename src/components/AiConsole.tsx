@@ -5,7 +5,7 @@ import type { ScanFilter } from "@/engine/ai/nlquery";
 import ScannerTable from "./ScannerTable";
 import { useLang } from "@/lib/i18n";
 
-export default function AiConsole({ onSelect }: { onSelect: (s: string) => void }) {
+export default function AiConsole({ onSelect, market }: { onSelect: (s: string) => void; market: string }) {
   const { t } = useLang();
   const examples = [t("ex1"), t("ex2"), t("ex3")];
   const [text, setText] = useState("");
@@ -22,7 +22,7 @@ export default function AiConsole({ onSelect }: { onSelect: (s: string) => void 
     if (q) setText(q);
     setLoading(true);
     try {
-      const r = await fetch("/api/ai", {
+      const r = await fetch(`/api/ai?market=${market}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "nlquery", text: query }),

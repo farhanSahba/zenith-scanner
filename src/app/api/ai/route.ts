@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 // طبقة الذكاء العربية: narrate | catalyst | nlquery
 export async function POST(req: NextRequest) {
-  const engine = getEngine();
+  const engine = getEngine(req.nextUrl.searchParams.get("market"));
   await engine.ensureStarted();
 
   let body: { mode?: string; symbol?: string; text?: string; headline?: string };

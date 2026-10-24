@@ -5,8 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // بث لحظي للـ snapshot عبر Server-Sent Events
-export async function GET() {
-  const engine = getEngine();
+export async function GET(req: Request) {
+  const market = new URL(req.url).searchParams.get("market");
+  const engine = getEngine(market);
   await engine.ensureStarted();
 
   const encoder = new TextEncoder();

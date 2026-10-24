@@ -1,11 +1,16 @@
 import { ScannerEngine } from "./engine";
+import { getMarket, type MarketId } from "./markets";
 
-// محرّك واحد مشترك يبقى حيّاً عبر إعادة تحميل الوحدات في التطوير.
-const g = globalThis as unknown as { __zenithEngine?: ScannerEngine };
+// محرّك لكل سوق، يبقى حيّاً عبر إعادة تحميل الوحدات في التطوير.
+const g = globalThis as unknown as { __zenithEngines?: Partial<Record<MarketId, ScannerEngine>> };
 
-export function getEngine(): ScannerEngine {
-  if (!g.__zenithEngine) {
-    g.__zenithEngine = new ScannerEngine();
+export function getEngine(market?: string | null): ScannerEngine {
+  if (!g.__zenithEngines) g.__zenithEngines = {};
+  const cfg = getMarket(market);
+  let eng = g.__zenithEngines[cfg.id];
+  if (!eng) {
+    eng = new ScannerEngine(cfg);
+    g.__zenithEngines[cfg.id] = eng;
   }
-  return g.__zenithEngine;
+  return eng;
 }

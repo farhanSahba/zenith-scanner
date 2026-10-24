@@ -71,3 +71,72 @@ export function sessionFraction(now: number): number {
   if (t < START) return 0.03; // ليل باكر: حجم متوقّع ضئيل (أرضية تمنع التضخّم)
   return Math.min(1, Math.max(0.03, (t - START) / (END - START)));
 }
+
+// ================= السوق السعودي (تداول) =================
+// بتوقيت الرياض (Asia/Riyadh). الأسبوع: الأحد–الخميس. العطلة: الجمعة والسبت.
+// مزاد افتتاح 9:30–10:00 · تداول مستمر 10:00–15:00 · مزاد إغلاق ~15:00.
+
+function saParts(now: number): { h: number; m: number; s: number; dow: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Riyadh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    weekday: "short",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(new Date(now));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "0";
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  let h = parseInt(get("hour"), 10);
+  if (h === 24) h = 0;
+  return {
+    h,
+    m: parseInt(get("minute"), 10),
+    s: parseInt(get("second"), 10),
+    dow: dowMap[get("weekday")] ?? 0,
+  };
+}
+
+// ساعة تداول بتوقيت الرياض
+export function marketClockSA(now: number): string {
+  const { h, m, s } = saParts(now);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+// مرحلة السوق السعودي
+export function realPhaseSA(now: number): SessionPhase {
+  const { h, m, dow } = saParts(now);
+  const t = h * 60 + m;
+  if (dow === 5 || dow === 6) return "closed"; // الجمعة/السبت عطلة
+  if (t < 9 * 60 + 30) return "closed"; // قبل 9:30
+  if (t < 10 * 60) return "pre"; // مزاد الافتتاح
+  if (t < 15 * 60) return "regular"; // التداول المستمر
+  if (t < 15 * 60 + 10) return "after"; // مزاد الإغلاق
+  return "closed";
+}
+
+export function phaseForSA(provider: string, now: number): SessionPhase {
+  return provider === "sim" ? "regular" : realPhaseSA(now);
+}
+
+// ms حتى إغلاق تداول (15:00 بتوقيت الرياض)
+export function msToSaClose(now: number): number {
+  const { h, m, s } = saParts(now);
+  const sec = h * 3600 + m * 60 + s;
+  let rem = 15 * 3600 - sec;
+  if (rem < 0) rem += 24 * 3600;
+  return rem * 1000;
+}
+
+// نسبة تقدّم جلسة تداول (10:00 → 15:00 = 5 ساعات)
+export function sessionFractionSA(now: number): number {
+  const { h, m } = saParts(now);
+  const t = h * 60 + m;
+  const START = 10 * 60;
+  const END = 15 * 60;
+  if (t >= END) return 1;
+  if (t < START) return 0.03;
+  return Math.min(1, Math.max(0.03, (t - START) / (END - START)));
+}

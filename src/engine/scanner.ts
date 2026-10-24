@@ -1,18 +1,35 @@
 import type { PanelKey, SymbolSnapshot } from "./types";
 
-// عتبات الماسح (قابلة للضبط). كلٌّ منها يبني لوحة مستقلة.
-export const PRESETS = {
-  gapUpMin: 3, // % فجوة صاعدة
-  lowFloatMax: 20, // بالملايين
-  momo2mMin: 3, // % خلال دقيقتين
-  hodAtrMax: 0.5, // القرب من قمة اليوم بوحدات ATR
+// عتبات الماسح لكل سوق (كلٌّ منها يبني لوحة مستقلة).
+export interface Preset {
+  gapUpMin: number; // % فجوة صاعدة
+  lowFloatMax: number; // بالملايين
+  momo2mMin: number; // % خلال دقيقتين
+  hodAtrMax: number; // القرب من قمة اليوم بوحدات ATR
+}
+
+// السوق الأمريكي: أسهم صغيرة متفجّرة (±مئات %)
+export const PRESETS_US: Preset = {
+  gapUpMin: 3,
+  lowFloatMax: 20,
+  momo2mMin: 3,
+  hodAtrMax: 0.5,
+};
+
+// السوق السعودي: حد النسبة ±10% → حركات أصغر، عتبات أقل
+export const PRESETS_SA: Preset = {
+  gapUpMin: 2,
+  lowFloatMax: 500,
+  momo2mMin: 1.5,
+  hodAtrMax: 0.6,
 };
 
 const take = <T>(arr: T[], n: number) => arr.slice(0, n);
 
-// يصنّف قائمة الرموز إلى لوحات الماسح الخمس، مرتّبة.
+// يصنّف قائمة الرموز إلى لوحات الماسح الخمس، مرتّبة (بعتبات السوق).
 export function classify(
-  snaps: SymbolSnapshot[]
+  snaps: SymbolSnapshot[],
+  PRESETS: Preset = PRESETS_US
 ): Record<PanelKey, SymbolSnapshot[]> {
   // Momo HOD: فوق الـ VWAP، قريب جداً من قمة اليوم، بميل صاعد وحجم نسبي جيد.
   const momoHod = take(

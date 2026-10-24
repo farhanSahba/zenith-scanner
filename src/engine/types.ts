@@ -124,6 +124,7 @@ export interface Snapshot {
   futures: Futures;
   universeCount: number;
   dataSource: string; // "sim" | "alpaca"
+  market?: "us" | "sa"; // السوق النشط
   note?: string; // تنبيه حالة (مثل الرجوع للمحاكاة)
   telegram?: boolean; // إشعارات Telegram مفعّلة؟
 }

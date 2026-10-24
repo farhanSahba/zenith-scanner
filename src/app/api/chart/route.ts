@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // بيانات الرسم لرمز معيّن (1د + 15د) مع المستويات المهمة
 export async function GET(req: NextRequest) {
-  const engine = getEngine();
+  const engine = getEngine(req.nextUrl.searchParams.get("market"));
   await engine.ensureStarted();
   const sym = req.nextUrl.searchParams.get("symbol");
   if (!sym) return NextResponse.json({ error: "symbol مطلوب" }, { status: 400 });

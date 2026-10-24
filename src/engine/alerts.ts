@@ -12,12 +12,18 @@ interface Mem {
   prevTwoMin: number; // لكشف حافة عبور عتبة الزخم (بدل تنبيه متكرّر طوال الموجة)
 }
 
-// عتبات كشف وضع الصقر — أبكر إشارة ممكنة، مع حواف (edge) وتهدئة تمنع «صياح الذيب».
-const SURGE_ZENVR = 3; // انفجار حجم: الحجم النسبي ≥ 3× المتوقّع
-const APPROACH_ATR = 0.4; // «يقترب»: ضمن 0.4 ATR من القمة (وقبل اللمس الفعلي)
+// عتبات كشف وضع الصقر لكل سوق — أبكر إشارة ممكنة، مع حواف وتهدئة تمنع «صياح الذيب».
+export interface AlertThresholds {
+  surgeZenVR: number; // انفجار حجم: الحجم النسبي ≥ × المتوقّع
+  approachAtr: number; // «يقترب»: ضمن هذا العدد من ATR من القمة
+  early2m: number; // زخم مبكر % خلال دقيقتين
+  strong2m: number; // زخم قوي % خلال دقيقتين
+}
+// الأمريكي: حركات كبيرة. السعودي: حد النسبة ±10% → عتبات أقل بكثير.
+export const ALERTS_US: AlertThresholds = { surgeZenVR: 3, approachAtr: 0.4, early2m: 3, strong2m: 5 };
+export const ALERTS_SA: AlertThresholds = { surgeZenVR: 3, approachAtr: 0.4, early2m: 1, strong2m: 2 };
+
 const APPROACH_REARM = 0.8; // لا يُعاد تسليح تنبيه الاقتراب إلا بعد ابتعاد واضح عن القمة
-const EARLY_2M = 3; // زخم مبكر ≥ 3% خلال دقيقتين
-const STRONG_2M = 5; // زخم قوي ≥ 5% خلال دقيقتين
 
 // فترات التهدئة لكل رمز لكل نوع (ms)
 const CD_SURGE = 120_000;
@@ -27,6 +33,7 @@ const CD_2M = 90_000;
 
 // كاشف الأحداث: يقارن اللقطة الحالية بذاكرة لكل رمز ويولّد تنبيهات مصنّفة بطبقات.
 export class AlertEngine {
+  constructor(private th: AlertThresholds = ALERTS_US) {}
   private mem = new Map<string, Mem>();
 
   private get(sym: string): Mem {
@@ -72,8 +79,8 @@ export class AlertEngine {
       if (
         m.seen &&
         rising &&
-        s.zenVR >= SURGE_ZENVR &&
-        m.prevZenVR < SURGE_ZENVR &&
+        s.zenVR >= this.th.surgeZenVR &&
+        m.prevZenVR < this.th.surgeZenVR &&
         now - m.lastSurge > CD_SURGE
       ) {
         m.lastSurge = now;
@@ -81,7 +88,7 @@ export class AlertEngine {
       }
 
       // ② يقترب من القمة (قبل الكسر) — يتطلّب ATR موثوقاً + تسليحاً (hysteresis)
-      const inApproach = s.atrReliable && s.atrHoD > 0.15 && s.atrHoD <= APPROACH_ATR;
+      const inApproach = s.atrReliable && s.atrHoD > 0.15 && s.atrHoD <= this.th.approachAtr;
       if (m.seen && rising && inApproach && m.approachArmed && now - m.lastApproach > CD_APPROACH) {
         m.lastApproach = now;
         m.approachArmed = false; // لا يُعاد حتى يبتعد السعر عن القمة
@@ -105,12 +112,12 @@ export class AlertEngine {
       // ④ زخم دقيقتين صاعد — حافة صاعدة لعبور 3% (قوي عند ≥5%)، لا تكرار طوال الموجة
       if (
         m.seen &&
-        s.twoMinPct >= EARLY_2M &&
-        m.prevTwoMin < EARLY_2M &&
+        s.twoMinPct >= this.th.early2m &&
+        m.prevTwoMin < this.th.early2m &&
         now - m.lastUp2m > CD_2M
       ) {
         m.lastUp2m = now;
-        const strong = s.twoMinPct >= STRONG_2M;
+        const strong = s.twoMinPct >= this.th.strong2m;
         out.push(
           mk(s, now, "up2m", strong ? "trigger" : "early", `+${s.twoMinPct.toFixed(1)} % /2Min`, "bull")
         );
@@ -119,8 +126,8 @@ export class AlertEngine {
       // ⑤ هبوط دقيقتين حاد — حافة هابطة لعبور -5%
       if (
         m.seen &&
-        s.twoMinPct <= -STRONG_2M &&
-        m.prevTwoMin > -STRONG_2M &&
+        s.twoMinPct <= -this.th.strong2m &&
+        m.prevTwoMin > -this.th.strong2m &&
         now - m.lastDown2m > CD_2M
       ) {
         m.lastDown2m = now;

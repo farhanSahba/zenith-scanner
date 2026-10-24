@@ -15,9 +15,11 @@ const SENT_COLOR: Record<string, string> = {
 export default function NewsPanel({
   news,
   onSelect,
+  market,
 }: {
   news: NewsItem[];
   onSelect: (sym: string) => void;
+  market: string;
 }) {
   const { t } = useLang();
   const [open, setOpen] = useState<Record<string, { loading: boolean; text?: string; ai?: boolean }>>(
@@ -27,7 +29,7 @@ export default function NewsPanel({
   async function analyze(item: NewsItem) {
     setOpen((o) => ({ ...o, [item.id]: { loading: true } }));
     try {
-      const res = await fetch("/api/ai", {
+      const res = await fetch(`/api/ai?market=${market}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "catalyst", headline: item.headline }),

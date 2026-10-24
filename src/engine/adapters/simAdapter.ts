@@ -9,9 +9,11 @@ import type {
 } from "./types";
 
 // ===== محرّك محاكاة سوق واقعي =====
-// يولّد tape حيّ لأسهم ضاربة (gappers / runners / faders / dumpers)
-// مع انفجارات زخم قصيرة تصنع قمم يوم وتنبيهات 2 دقيقة واقعية.
-// لا يحتاج أي إنترنت أو حساب — يشتغل فوراً.
+// يولّد tape حيّ لأسهم ضاربة مع انفجارات زخم قصيرة تصنع قمم يوم وتنبيهات واقعية.
+// profile = "us": أسهم صغيرة متفجّرة (±مئات%). "sa": تداول بحد نسبة ±10%.
+// لا يحتاج إنترنت أو حساب — يشتغل فوراً.
+
+export type SimProfile = "us" | "sa";
 
 type Character = "runner" | "gapper" | "fader" | "chop" | "dumper";
 
@@ -20,11 +22,10 @@ interface SimSym {
   character: Character;
   price: number;
   dayHigh: number;
-  drift: number; // ميل لحظي
-  burst: number; // عدّاد انفجار الزخم المتبقي (ticks)
-  burstDir: number; // اتجاه الانفجار (+1/-1)
-  vol: number; // تقلّب أساسي نسبي
-  activity: number; // 0..1 احتمال إصدار tick كل دورة
+  burst: number;
+  burstDir: number;
+  vol: number;
+  activity: number;
 }
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -48,54 +49,69 @@ function weightedChar(): Character {
   return "chop";
 }
 
-function randomSymbol(used: Set<string>): string {
-  const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function randomSymbol(used: Set<string>, profile: SimProfile): string {
   let s = "";
-  do {
-    const n = Math.random() < 0.5 ? 3 : 4;
-    s = "";
-    for (let i = 0; i < n; i++) s += L[Math.floor(Math.random() * L.length)];
-  } while (used.has(s));
+  if (profile === "sa") {
+    // رمز سعودي: 4 أرقام (1000–9999)
+    do {
+      s = String(Math.floor(1000 + Math.random() * 9000));
+    } while (used.has(s));
+  } else {
+    const L = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    do {
+      const n = Math.random() < 0.5 ? 3 : 4;
+      s = "";
+      for (let i = 0; i < n; i++) s += L[Math.floor(Math.random() * L.length)];
+    } while (used.has(s));
+  }
   used.add(s);
   return s;
 }
 
-function buildSeeds(count: number): SymbolSeed[] {
+function buildSeeds(count: number, profile: SimProfile): SymbolSeed[] {
   const seeds: SymbolSeed[] = [];
   const used = new Set<string>();
+  const sa = profile === "sa";
   for (let i = 0; i < count; i++) {
-    const symbol = randomSymbol(used);
+    const symbol = randomSymbol(used, profile);
     const character = weightedChar();
 
-    // الفلوت منحاز للمنخفض (أكثر الضاربات)
-    const floatM =
-      Math.random() < 0.6
-        ? rnd(0.3, 15) // فلوت منخفض
-        : Math.random() < 0.7
-        ? rnd(15, 60)
-        : rnd(60, 180);
+    const floatM = sa
+      ? rnd(20, 800) // فلوت سعودي أكبر (ملايين الأسهم)
+      : Math.random() < 0.6
+      ? rnd(0.3, 15)
+      : Math.random() < 0.7
+      ? rnd(15, 60)
+      : rnd(60, 180);
 
-    // سعر منخفض غالباً
-    const prevClose =
-      Math.random() < 0.7 ? rnd(0.4, 8) : rnd(8, 40);
+    const prevClose = sa
+      ? Math.random() < 0.7
+        ? rnd(10, 80) // أسعار تداول بالريال
+        : rnd(80, 250)
+      : Math.random() < 0.7
+      ? rnd(0.4, 8)
+      : rnd(8, 40);
 
-    // Gap حسب الطبع
+    // الفجوة: السعودي محدود (±10%)، الأمريكي متفجّر
     let gap = 0;
-    if (character === "gapper" || character === "runner") {
-      gap = floatM < 15 ? rnd(0.08, 0.9) : rnd(0.05, 0.3); // الفلوت المنخفض يفجّر
-    } else if (character === "fader") {
-      gap = rnd(0.1, 0.5);
-    } else if (character === "dumper") {
-      gap = rnd(-0.05, 0.12);
+    if (sa) {
+      if (character === "gapper" || character === "runner") gap = rnd(0.015, 0.06);
+      else if (character === "fader") gap = rnd(0.01, 0.05);
+      else if (character === "dumper") gap = rnd(-0.04, 0.01);
+      else gap = rnd(-0.015, 0.03);
     } else {
-      gap = rnd(-0.02, 0.08);
+      if (character === "gapper" || character === "runner") gap = floatM < 15 ? rnd(0.08, 0.9) : rnd(0.05, 0.3);
+      else if (character === "fader") gap = rnd(0.1, 0.5);
+      else if (character === "dumper") gap = rnd(-0.05, 0.12);
+      else gap = rnd(-0.02, 0.08);
     }
 
-    const open = Math.max(0.1, prevClose * (1 + gap));
-    const avgDailyVol =
-      (floatM < 15 ? rnd(2, 20) : rnd(0.5, 8)) * 1_000_000;
+    const open = Math.max(sa ? 1 : 0.1, prevClose * (1 + gap));
+    const avgDailyVol = sa
+      ? rnd(0.5, 10) * 1_000_000
+      : (floatM < 15 ? rnd(2, 20) : rnd(0.5, 8)) * 1_000_000;
 
-    const dayHighSeed = Math.max(open, open * rnd(1.0, 1.15));
+    const dayHighSeed = Math.max(open, open * rnd(1.0, sa ? 1.05 : 1.15));
     const premktHigh = character === "fader" ? dayHighSeed : open * rnd(0.98, 1.05);
 
     seeds.push({
@@ -111,7 +127,7 @@ function buildSeeds(count: number): SymbolSeed[] {
   return seeds;
 }
 
-const NEWS_TEMPLATES: { kind: NewsEvent["kind"]; en: string; src: string }[] = [
+const NEWS_US: { kind: NewsEvent["kind"]; en: string; src: string }[] = [
   { kind: "contract", en: "announces $%M multi-year supply agreement with major OEM", src: "PR Newswire" },
   { kind: "fda", en: "receives FDA clearance for its lead device", src: "GlobeNewswire" },
   { kind: "earnings", en: "reports Q beat, revenue up %% YoY", src: "Business Wire" },
@@ -120,37 +136,54 @@ const NEWS_TEMPLATES: { kind: NewsEvent["kind"]; en: string; src: string }[] = [
   { kind: "pr", en: "unveils strategic partnership to expand AI platform", src: "PR Newswire" },
 ];
 
+const NEWS_SA: { kind: NewsEvent["kind"]; en: string; src: string }[] = [
+  { kind: "contract", en: "توقّع عقداً بقيمة %M مليون ريال مع جهة حكومية", src: "تداول" },
+  { kind: "earnings", en: "أرباح الربع ترتفع %% سنوياً", src: "تداول" },
+  { kind: "analyst", en: "رفع توصية من محلّل مع سعر مستهدف أعلى", src: "أرقام" },
+  { kind: "offering", en: "إعلان عن طرح/زيادة رأس المال — حذر", src: "تداول" },
+  { kind: "pr", en: "توقيع شراكة استراتيجية للتوسّع", src: "مباشر" },
+  { kind: "contract", en: "ترسية مشروع بقيمة %M مليون ريال", src: "تداول" },
+];
+
 export class SimAdapter implements MarketAdapter {
   readonly name = "sim";
   private syms: SimSym[] = [];
   private seedList: SymbolSeed[];
   private timer: ReturnType<typeof setInterval> | null = null;
   private newsTimer: ReturnType<typeof setInterval> | null = null;
+  private profile: SimProfile;
 
-  constructor(count = 60) {
-    this.seedList = buildSeeds(count);
+  constructor(count = 60, profile: SimProfile = "us") {
+    this.profile = profile;
+    this.seedList = buildSeeds(count, profile);
     this.syms = this.seedList.map((seed) => this.initSym(seed));
   }
 
   private initSym(seed: SymbolSeed): SimSym {
-    // استنتاج الطبع من الفجوة/الفلوت (تقريبي)
     const gap = (seed.open - seed.prevClose) / seed.prevClose;
     let character: Character = "chop";
-    if (gap > 0.25 && seed.float < 20) character = Math.random() < 0.6 ? "runner" : "gapper";
-    else if (gap > 0.08) character = Math.random() < 0.5 ? "gapper" : "fader";
-    else if (gap < 0) character = "dumper";
+    if (this.profile === "sa") {
+      if (gap > 0.03) character = Math.random() < 0.6 ? "runner" : "gapper";
+      else if (gap > 0.01) character = Math.random() < 0.5 ? "gapper" : "fader";
+      else if (gap < 0) character = "dumper";
+    } else {
+      if (gap > 0.25 && seed.float < 20) character = Math.random() < 0.6 ? "runner" : "gapper";
+      else if (gap > 0.08) character = Math.random() < 0.5 ? "gapper" : "fader";
+      else if (gap < 0) character = "dumper";
+    }
 
+    const baseVol = this.profile === "sa" ? 0.0018 : 0.006;
     return {
       seed,
       character,
       price: seed.open,
       dayHigh: seed.dayHighSeed,
-      drift: 0,
       burst: 0,
       burstDir: 1,
-      vol: (character === "runner" || character === "gapper" ? 0.006 : 0.004) * (seed.open < 3 ? 1.5 : 1),
-      activity:
-        character === "runner" ? 0.9 : character === "chop" ? 0.35 : 0.6,
+      vol:
+        (character === "runner" || character === "gapper" ? baseVol : baseVol * 0.67) *
+        (this.profile === "us" && seed.open < 3 ? 1.5 : 1),
+      activity: character === "runner" ? 0.9 : character === "chop" ? 0.35 : 0.6,
     };
   }
 
@@ -180,43 +213,34 @@ export class SimAdapter implements MarketAdapter {
     }, TICK_MS);
 
     if (onNews) {
+      const templates = this.profile === "sa" ? NEWS_SA : NEWS_US;
       this.newsTimer = setInterval(() => {
         const s = pick(this.syms);
-        const tpl = pick(NEWS_TEMPLATES);
+        const tpl = pick(templates);
         const headline = `${s.seed.symbol} ${tpl.en
           .replace("%M", String(Math.round(rnd(3, 60))))
           .replace("%%", String(Math.round(rnd(12, 240))))
           .replace("%", "")}`;
-        onNews({
-          symbol: s.seed.symbol,
-          headline,
-          source: tpl.src,
-          time: Date.now(),
-          kind: tpl.kind,
-        });
+        onNews({ symbol: s.seed.symbol, headline, source: tpl.src, time: Date.now(), kind: tpl.kind });
       }, 9_000);
     }
   }
 
-  // خطوة سعرية لرمز واحد (مُقيّدة لتعطي نطاقات واقعية)
   private step(s: SimSym) {
-    // إطلاق انفجار زخم عشوائياً
+    const sa = this.profile === "sa";
     if (s.burst <= 0 && Math.random() < 0.014) {
       s.burst = Math.round(rnd(6, 16));
-      if (s.character === "runner" || s.character === "gapper")
-        s.burstDir = Math.random() < 0.78 ? 1 : -1;
-      else if (s.character === "fader" || s.character === "dumper")
-        s.burstDir = Math.random() < 0.75 ? -1 : 1;
+      if (s.character === "runner" || s.character === "gapper") s.burstDir = Math.random() < 0.78 ? 1 : -1;
+      else if (s.character === "fader" || s.character === "dumper") s.burstDir = Math.random() < 0.75 ? -1 : 1;
       else s.burstDir = Math.random() < 0.5 ? 1 : -1;
     }
 
-    // الميل الأساسي حسب الطبع
     let baseDrift = 0;
     switch (s.character) {
-      case "runner": baseDrift = 0.0006; break;
-      case "gapper": baseDrift = 0.0002; break;
-      case "fader": baseDrift = -0.0005; break;
-      case "dumper": baseDrift = -0.0009; break;
+      case "runner": baseDrift = sa ? 0.0002 : 0.0006; break;
+      case "gapper": baseDrift = sa ? 0.0001 : 0.0002; break;
+      case "fader": baseDrift = sa ? -0.00015 : -0.0005; break;
+      case "dumper": baseDrift = sa ? -0.0003 : -0.0009; break;
       case "chop": baseDrift = 0; break;
     }
 
@@ -226,29 +250,29 @@ export class SimAdapter implements MarketAdapter {
       s.burst--;
     }
 
-    // ارتداد نحو المرساة (الافتتاح) يمنع الانفلات ويحاكي نطاق اليوم
     const anchor = s.seed.open;
     const ext = s.price / anchor;
     if (ext > 1.3) drift -= (ext - 1.3) * 0.02;
     else if (ext < 0.7) drift += (0.7 - ext) * 0.02;
-    if (s.character === "chop") drift += (anchor - s.price) / Math.max(anchor, 0.1) * 0.02;
+    if (s.character === "chop") drift += ((anchor - s.price) / Math.max(anchor, 0.1)) * 0.02;
 
     const noise = (Math.random() - 0.5) * 2 * s.vol;
     let pct = drift + noise;
-    pct = Math.max(-0.06, Math.min(0.06, pct)); // حدّ لكل tick
+    const tickClamp = sa ? 0.015 : 0.06; // السعودي حركة أهدأ لكل tick
+    pct = Math.max(-tickClamp, Math.min(tickClamp, pct));
 
     s.price = s.price * (1 + pct);
 
-    // سقف/أرضية صلبة (الفلوت المنخفض يركض بقوة لكن ليس بلا حدود)
-    const ceil = Math.max(anchor, s.seed.prevClose) * 3.2;
-    const floor = s.seed.prevClose * 0.25;
+    // الحدود: السعودي ±10% من إغلاق الأمس (حد النسبة)؛ الأمريكي نطاق واسع.
+    const ceil = sa ? s.seed.prevClose * 1.1 : Math.max(anchor, s.seed.prevClose) * 3.2;
+    const floor = sa ? s.seed.prevClose * 0.9 : s.seed.prevClose * 0.25;
     s.price = Math.max(floor, Math.min(ceil, s.price));
 
     if (s.price > s.dayHigh) s.dayHigh = s.price;
   }
 
   private sizeFor(s: SimSym): number {
-    const base = s.seed.avgDailyVol / 20_000; // متوسط لكل tick تقريبي
+    const base = s.seed.avgDailyVol / 20_000;
     const mult = s.burst > 0 ? rnd(2, 6) : rnd(0.3, 1.4);
     return Math.max(1, Math.round(base * mult));
   }
