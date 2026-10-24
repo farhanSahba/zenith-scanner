@@ -9,6 +9,8 @@ export interface SymbolSeed {
   open: number; // سعر الافتتاح (يحدّد الـ Gap)
   dayHighSeed: number;
   premktHigh: number;
+  dayVolume?: number; // حجم جلسة اليوم حتى الآن (لتبذير ZenVR) — المزوّد الحقيقي فقط
+  dayVwap?: number; // VWAP جلسة اليوم (لتبذير cumPV وتصحيح VWAP فوراً)
 }
 
 export interface NewsEvent {

@@ -31,6 +31,8 @@ export class SymbolState {
     float: number;
     avgDailyVol: number;
     prevClose: number;
+    dayVolume?: number; // حجم جلسة اليوم حتى الآن (المزوّد الحقيقي)
+    dayVwap?: number; // VWAP جلسة اليوم
   }) {
     this.symbol = opts.symbol;
     this.float = opts.float;
@@ -41,6 +43,15 @@ export class SymbolState {
     this.dayLow = opts.prevClose;
     this.bid = opts.prevClose;
     this.ask = opts.prevClose;
+
+    // تبذير حجم الجلسة و VWAP من البار اليومي حتى يكون ZenVR و VWAP صحيحين من أول لقطة
+    // (بدون هذا يبدأ الحجم من صفر منذ لحظة الاشتراك فيبدو ZenVR ضئيلاً زيفاً).
+    if (opts.dayVolume && opts.dayVolume > 0) {
+      this.volume = opts.dayVolume;
+      const vw = opts.dayVwap && opts.dayVwap > 0 ? opts.dayVwap : opts.prevClose;
+      this.cumPV = this.volume * vw;
+      this.vwap = vw;
+    }
   }
 
   // يُستدعى عند بداية الجلسة الرئيسية لتثبيت سعر الافتتاح (لحساب الـ Gap).

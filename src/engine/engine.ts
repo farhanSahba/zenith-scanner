@@ -5,7 +5,7 @@ import { SymbolState } from "./symbolState";
 import { buildSymbolSnapshot } from "./snapshot";
 import { classify } from "./scanner";
 import { AlertEngine } from "./alerts";
-import { marketClock, msToAhClose, phaseFor } from "./clock";
+import { marketClock, msToAhClose, phaseFor, sessionFraction } from "./clock";
 import type {
   Alert,
   NewsItem,
@@ -78,9 +78,12 @@ export class ScannerEngine {
         float: seed.float,
         avgDailyVol: seed.avgDailyVol,
         prevClose: seed.prevClose,
+        dayVolume: seed.dayVolume,
+        dayVwap: seed.dayVwap,
       });
       st.setOpen(seed.open);
       st.premktHigh = seed.premktHigh;
+      st.dayHigh = Math.max(st.dayHigh, seed.dayHighSeed); // قمة اليوم الحقيقية (لـ atrHoD صحيح فوراً)
       // تعبئة تاريخية (للمحاكاة) حتى تظهر الرسوم مكتملة
       if (this.provider === "sim") {
         st.backfill(generateBackfill(seed, now));
@@ -126,9 +129,12 @@ export class ScannerEngine {
           float: seed.float,
           avgDailyVol: seed.avgDailyVol,
           prevClose: seed.prevClose,
+          dayVolume: seed.dayVolume,
+          dayVwap: seed.dayVwap,
         });
         st.setOpen(seed.open);
         st.premktHigh = seed.premktHigh;
+        st.dayHigh = Math.max(st.dayHigh, seed.dayHighSeed); // قمة اليوم الحقيقية (لـ atrHoD صحيح فوراً)
         this.states.set(seed.symbol, st);
         newSyms.push(seed.symbol);
       }
@@ -201,10 +207,13 @@ export class ScannerEngine {
   private buildSnapshot() {
     const now = Date.now();
     const phase = phaseFor(this.provider, now);
-    const sessionProgress = Math.max(
-      0.05,
-      Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05)
-    );
+    // المقام في ZenVR = متوسط حجم اليوم × تقدّم الجلسة.
+    // المحاكاة: تقدّم مبني على وقت تشغيل المحرّك (جلسة صناعية تبدأ عند الإقلاع).
+    // الحقيقي: نسبة نهار التداول الفعلي من ساعة السوق (لا وقت التشغيل).
+    const sessionProgress =
+      this.provider === "sim"
+        ? Math.max(0.05, Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05))
+        : sessionFraction(now);
 
     const all: SymbolSnapshot[] = [];
     for (const st of this.states.values()) {

@@ -59,3 +59,15 @@ export function phaseFor(provider: string, now: number): SessionPhase {
   // المحاكاة دائماً نشطة (regular) ليبقى العرض حيّاً في أي وقت
   return provider === "sim" ? "regular" : realPhase(now);
 }
+
+// نسبة تقدّم نهار التداول (0..1) من ساعة السوق — مقام ZenVR للمزوّد الحقيقي.
+// النافذة: 04:00 (بداية ما قبل السوق) → 20:00 (إغلاق ما بعد السوق) = 16 ساعة.
+export function sessionFraction(now: number): number {
+  const { h, m } = etParts(now);
+  const t = h * 60 + m; // دقائق منذ منتصف الليل ET
+  const START = 4 * 60; // 04:00
+  const END = 20 * 60; // 20:00
+  if (t >= END) return 1; // انتهى نهار التداول (حجم متوقّع كامل)
+  if (t < START) return 0.03; // ليل باكر: حجم متوقّع ضئيل (أرضية تمنع التضخّم)
+  return Math.min(1, Math.max(0.03, (t - START) / (END - START)));
+}

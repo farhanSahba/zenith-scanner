@@ -27,7 +27,7 @@ const DATA = "https://data.alpaca.markets";
 interface Snapshot {
   latestTrade?: { p?: number; t?: string };
   latestQuote?: { bp?: number; ap?: number };
-  dailyBar?: { o?: number; h?: number; l?: number; c?: number; v?: number };
+  dailyBar?: { o?: number; h?: number; l?: number; c?: number; v?: number; vw?: number };
   prevDailyBar?: { c?: number; v?: number };
 }
 
@@ -382,6 +382,15 @@ export class AlpacaAdapter implements MarketAdapter {
     const open = numOr(s.dailyBar?.o, prevClose);
     const dayHigh = numOr(s.dailyBar?.h, Math.max(open, p));
     const avgVol = numOr(s.prevDailyBar?.v, numOr(s.dailyBar?.v, 1_000_000));
+    // حجم و VWAP جلسة اليوم من البار اليومي (لتبذير ZenVR و VWAP الصحيحين فوراً).
+    const dayVol = numOr(s.dailyBar?.v, 0);
+    // VWAP يومي سليم ضمن نطاق اليوم — يتجنّب قيم vw الشاذة (أسهم القروش/التجزئة العكسية).
+    const loBand = Math.min(prevClose, open, dayHigh) * 0.5;
+    const hiBand = dayHigh * 1.6;
+    let dayVwap = numOr(s.dailyBar?.vw, 0);
+    if (!(dayVwap >= loBand && dayVwap <= hiBand)) {
+      dayVwap = (open + dayHigh) / 2; // بديل منطقي ضمن نطاق اليوم
+    }
     return {
       symbol: sym,
       float: this.floatFor(sym),
@@ -390,6 +399,8 @@ export class AlpacaAdapter implements MarketAdapter {
       open,
       dayHighSeed: dayHigh,
       premktHigh: open,
+      dayVolume: dayVol > 0 ? dayVol : undefined,
+      dayVwap,
     };
   }
 
