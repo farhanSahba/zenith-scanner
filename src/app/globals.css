@@ -21,6 +21,15 @@ body {
   font-family: var(--font-mono);
 }
 
+/* إخفاء شريط التمرير (للشريط العلوي القابل للتمرير على الجوال) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* شريط تمرير داكن رفيع */
 *::-webkit-scrollbar {
   width: 8px;

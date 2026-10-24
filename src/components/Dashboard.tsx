@@ -27,6 +27,22 @@ const PANELS: { key: PanelKey; titleKey: TKey; accent: string; cols: string[] }[
 // لوحات تعرض عمود تدفّق السيولة (السعودي Pro)
 const FLOW_PANELS = new Set<PanelKey>(["momoHod", "momo2mUp", "momo2mDown"]);
 
+type MobileView = "scan" | "alerts" | "chart" | "tools";
+type Tab = "ai" | "news" | "perf";
+
+// هل العرض سطح مكتب (≥ lg)؟ — لعرض تخطيط واحد فقط (تفادي تحميل المكوّنات مرّتين)
+function useIsDesktop(): boolean {
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const on = () => setDesktop(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return desktop;
+}
+
 export default function Dashboard({ market }: { market: MarketId }) {
   return (
     <LangProvider>
@@ -41,7 +57,9 @@ function DashboardInner({ market }: { market: MarketId }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [tts, setTts] = useState(false);
   const [hawk, setHawk] = useState(true);
-  const [tab, setTab] = useState<"ai" | "news" | "perf">("ai");
+  const [tab, setTab] = useState<Tab>("ai");
+  const [mobileView, setMobileView] = useState<MobileView>("scan");
+  const isDesktop = useIsDesktop();
   const lastSpoken = useRef<string | null>(null);
 
   useEffect(() => {
@@ -97,8 +115,73 @@ function DashboardInner({ market }: { market: MarketId }) {
     });
   }
 
+  // اختيار رمز: على الجوال ينقل تلقائياً لعرض الرسم
+  function selectSymbol(sym: string) {
+    setSelected(sym);
+    if (!isDesktop) setMobileView("chart");
+  }
+
+  // ===== قطع المحتوى (تُرسم في تخطيط واحد فقط) =====
+  const panelEls = PANELS.map((p) => {
+    const cols = market === "sa" && FLOW_PANELS.has(p.key) ? [...p.cols, "flow"] : p.cols;
+    return (
+      <Panel
+        key={p.key}
+        title={t(p.titleKey)}
+        accent={p.accent}
+        className="h-full"
+        badge={<span className="text-slate-600 text-[10px]">{snap?.panels[p.key]?.length ?? 0}</span>}
+      >
+        <ScannerTable
+          rows={snap?.panels[p.key] ?? []}
+          cols={cols}
+          selected={selected ?? undefined}
+          onSelect={selectSymbol}
+        />
+      </Panel>
+    );
+  });
+
+  const alertsPanel = (
+    <Panel
+      title={t("panelAlerts")}
+      accent="#ffb020"
+      className="h-full"
+      badge={<span className="text-slate-600 text-[10px]">{alerts.length}</span>}
+    >
+      <AlertsFeed alerts={alerts} onSelect={selectSymbol} />
+    </Panel>
+  );
+
+  const chartArea = <ChartsArea symbol={selected} market={market} />;
+
+  const toolsArea = (
+    <div className="panel h-full flex flex-col">
+      <div className="flex border-b border-base-700 shrink-0">
+        <TabBtn active={tab === "ai"} onClick={() => setTab("ai")}>
+          {t("aiTab")}
+        </TabBtn>
+        <TabBtn active={tab === "news"} onClick={() => setTab("news")}>
+          {t("newsTab")} {snap?.news.length ? `(${snap.news.length})` : ""}
+        </TabBtn>
+        <TabBtn active={tab === "perf"} onClick={() => setTab("perf")}>
+          {t("perfTab")}
+        </TabBtn>
+      </div>
+      <div className="flex-1 min-h-0">
+        {tab === "ai" ? (
+          <AiConsole onSelect={selectSymbol} market={market} />
+        ) : tab === "news" ? (
+          <NewsPanel news={snap?.news ?? []} onSelect={selectSymbol} market={market} />
+        ) : (
+          <PerfPanel market={market} />
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="h-screen flex flex-col bg-base-900 text-slate-300">
+    <div className="h-[100dvh] flex flex-col bg-base-900 text-slate-300 overflow-hidden">
       <TopBar
         snap={snap}
         connected={connected}
@@ -109,73 +192,85 @@ function DashboardInner({ market }: { market: MarketId }) {
         market={market}
       />
 
-      <main className="flex-1 min-h-0 flex flex-col gap-2 p-2">
-        <section className="flex gap-2" style={{ height: "45%" }}>
-          <div className="flex-1 grid grid-cols-2 xl:grid-cols-3 grid-rows-2 gap-2 min-w-0">
-            {PANELS.map((p) => {
-              // عمود تدفّق السيولة للسوق السعودي (Pro) في لوحات الزخم
-              const cols =
-                market === "sa" && FLOW_PANELS.has(p.key) ? [...p.cols, "flow"] : p.cols;
-              return (
-                <Panel
-                  key={p.key}
-                  title={t(p.titleKey)}
-                  accent={p.accent}
-                  badge={<span className="text-slate-600 text-[10px]">{snap?.panels[p.key]?.length ?? 0}</span>}
-                >
-                  <ScannerTable
-                    rows={snap?.panels[p.key] ?? []}
-                    cols={cols}
-                    selected={selected ?? undefined}
-                    onSelect={setSelected}
-                  />
-                </Panel>
-              );
-            })}
-          </div>
-
-          <div className="w-[340px] shrink-0">
-            <Panel
-              title={t("panelAlerts")}
-              accent="#ffb020"
-              className="h-full"
-              badge={<span className="text-slate-600 text-[10px]">{alerts.length}</span>}
-            >
-              <AlertsFeed alerts={alerts} onSelect={setSelected} />
-            </Panel>
-          </div>
-        </section>
-
-        <section className="flex-1 min-h-0 flex gap-2">
-          <div className="flex-[3] min-w-0">
-            <ChartsArea symbol={selected} market={market} />
-          </div>
-
-          <div className="flex-[2] min-w-0 panel">
-            <div className="flex border-b border-base-700 shrink-0">
-              <TabBtn active={tab === "ai"} onClick={() => setTab("ai")}>
-                {t("aiTab")}
-              </TabBtn>
-              <TabBtn active={tab === "news"} onClick={() => setTab("news")}>
-                {t("newsTab")} {snap?.news.length ? `(${snap.news.length})` : ""}
-              </TabBtn>
-              <TabBtn active={tab === "perf"} onClick={() => setTab("perf")}>
-                {t("perfTab")}
-              </TabBtn>
+      {isDesktop ? (
+        /* ===== سطح المكتب: التخطيط الكامل ===== */
+        <main className="flex-1 min-h-0 flex flex-col gap-2 p-2">
+          <section className="flex gap-2" style={{ height: "45%" }}>
+            <div className="flex-1 grid grid-cols-2 xl:grid-cols-3 grid-rows-2 gap-2 min-w-0">
+              {panelEls}
             </div>
-            <div className="flex-1 min-h-0">
-              {tab === "ai" ? (
-                <AiConsole onSelect={setSelected} market={market} />
-              ) : tab === "news" ? (
-                <NewsPanel news={snap?.news ?? []} onSelect={setSelected} market={market} />
-              ) : (
-                <PerfPanel market={market} />
-              )}
-            </div>
+            <div className="w-[340px] shrink-0">{alertsPanel}</div>
+          </section>
+          <section className="flex-1 min-h-0 flex gap-2">
+            <div className="flex-[3] min-w-0">{chartArea}</div>
+            <div className="flex-[2] min-w-0">{toolsArea}</div>
+          </section>
+        </main>
+      ) : (
+        /* ===== الجوال: منطقة واحدة + شريط تنقّل سفلي ===== */
+        <main className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-hidden p-2">
+            {mobileView === "scan" && (
+              <div className="h-full overflow-auto flex flex-col gap-2 pb-1">
+                {panelEls.map((el, i) => (
+                  <div key={i} className="shrink-0 h-[280px]">
+                    {el}
+                  </div>
+                ))}
+              </div>
+            )}
+            {mobileView === "alerts" && <div className="h-full">{alertsPanel}</div>}
+            {mobileView === "chart" && <div className="h-full">{chartArea}</div>}
+            {mobileView === "tools" && <div className="h-full">{toolsArea}</div>}
           </div>
-        </section>
-      </main>
+          <MobileNav view={mobileView} setView={setMobileView} alertCount={alerts.length} />
+        </main>
+      )}
     </div>
+  );
+}
+
+function MobileNav({
+  view,
+  setView,
+  alertCount,
+}: {
+  view: MobileView;
+  setView: (v: MobileView) => void;
+  alertCount: number;
+}) {
+  const { t } = useLang();
+  const items: { key: MobileView; icon: string; label: TKey; badge?: number }[] = [
+    { key: "scan", icon: "📊", label: "navScan" },
+    { key: "alerts", icon: "🔔", label: "navAlerts", badge: alertCount },
+    { key: "chart", icon: "📈", label: "navChart" },
+    { key: "tools", icon: "✦", label: "navTools" },
+  ];
+  return (
+    <nav className="shrink-0 flex items-stretch border-t border-base-700 bg-base-850 pb-[env(safe-area-inset-bottom)]">
+      {items.map((it) => {
+        const active = view === it.key;
+        return (
+          <button
+            key={it.key}
+            onClick={() => setView(it.key)}
+            className={clsx(
+              "relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-semibold transition-colors",
+              active ? "text-neon-cyan" : "text-slate-500 hover:text-slate-300"
+            )}
+          >
+            <span className="text-base leading-none">{it.icon}</span>
+            <span>{t(it.label)}</span>
+            {it.badge ? (
+              <span className="absolute top-1 ltr:right-1/4 rtl:left-1/4 min-w-[16px] h-4 px-1 rounded-full bg-neon-amber text-base-900 text-[9px] font-black flex items-center justify-center">
+                {it.badge > 99 ? "99+" : it.badge}
+              </span>
+            ) : null}
+            {active && <span className="absolute bottom-0 inset-x-3 h-0.5 rounded-full bg-neon-cyan" />}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -184,7 +279,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       className={clsx(
-        "px-3 py-1.5 text-[12px] font-semibold",
+        "px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap",
         active ? "text-neon-cyan border-b-2 border-neon-cyan bg-base-800" : "text-slate-500 hover:text-slate-300"
       )}
     >

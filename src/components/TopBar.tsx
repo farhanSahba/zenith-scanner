@@ -36,22 +36,22 @@ export default function TopBar({
   const phaseLabel = t((phaseKey[snap?.phase ?? "regular"] ?? "phaseRegular") as never);
 
   return (
-    <header className="flex items-center gap-4 px-4 h-14 bg-base-850 border-b border-base-700 shrink-0">
+    <header className="flex items-center gap-2 md:gap-4 px-2 md:px-4 h-12 md:h-14 bg-base-850 border-b border-base-700 shrink-0 overflow-x-auto no-scrollbar">
       {/* الهوية */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <div className="w-7 h-7 rounded bg-gradient-to-br from-neon-green to-neon-cyan flex items-center justify-center text-base-900 font-black text-sm">
           Z
         </div>
         <div className="leading-none">
           <div className="font-black text-slate-100 text-sm tracking-wide">ZENITH</div>
-          <div className="text-[10px] text-slate-500">{t("subtitle")}</div>
+          <div className="hidden sm:block text-[10px] text-slate-500">{t("subtitle")}</div>
         </div>
       </div>
 
       {/* السوق النشط + تبديل */}
       <a
         href="/"
-        className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40"
+        className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40 shrink-0"
         title={t("markets")}
       >
         <span>{flag}</span>
@@ -60,7 +60,7 @@ export default function TopBar({
       </a>
 
       {/* مصدر الداتا + حالة الاتصال */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <span
           className={clsx(
             "text-[10px] px-2 py-[2px] rounded border font-bold uppercase",
@@ -80,9 +80,9 @@ export default function TopBar({
               connected ? "bg-neon-green animate-pulseDot" : "bg-neon-red"
             )}
           />
-          {connected ? t("connected") : t("disconnected")}
+          <span className="hidden sm:inline">{connected ? t("connected") : t("disconnected")}</span>
         </span>
-        <span className="text-[10px] text-slate-600">
+        <span className="hidden sm:inline text-[10px] text-slate-600">
           · {snap?.universeCount ?? 0} {t("symbols")}
         </span>
         {snap?.telegram && (
@@ -110,45 +110,47 @@ export default function TopBar({
         <span className="text-slate-600">{t("legendRule")}</span>
       </div>
 
-      {/* يمين: عقود + ساعة + عدّاد + صوت + لغة */}
-      <div className="ms-auto flex items-center gap-4" dir="ltr">
-        <Fut label="DJ" v={fut.dj} />
-        <Fut label="S&P" v={fut.sp} />
-        <div className="text-center leading-none">
+      {/* يمين: عقود + ساعة + عدّاد + صوت + لغة (الثانوي يُخفى على الجوال) */}
+      <div className="ms-auto flex items-center gap-2 md:gap-4" dir="ltr">
+        <div className="hidden md:flex items-center gap-4">
+          <Fut label="DJ" v={fut.dj} />
+          <Fut label="S&P" v={fut.sp} />
+        </div>
+        <div className="text-center leading-none shrink-0">
           <div className="text-[10px] text-slate-500">{phaseLabel}</div>
           <div className="tnum text-slate-200 text-sm">{snap?.marketClock ?? "--:--:--"}</div>
         </div>
-        <div className="text-center leading-none">
+        <div className="hidden sm:block text-center leading-none shrink-0">
           <div className="text-[10px] text-slate-500">{t("ahClose")}</div>
           <div className="tnum text-neon-cyan text-sm">{fmtCountdown(snap?.toAhCloseMs ?? 0)}</div>
         </div>
         <button
           onClick={onToggleHawk}
           className={clsx(
-            "text-[11px] px-2.5 py-1 rounded border",
+            "text-[11px] px-2 md:px-2.5 py-1 rounded border shrink-0",
             hawk
               ? "text-neon-amber border-neon-amber/50 bg-neon-amber/10"
               : "text-slate-400 border-base-700 hover:bg-base-700/40"
           )}
           title={t("hawkTip")}
         >
-          🦅 {t("hawkLabel")}
+          🦅 <span className="hidden md:inline">{t("hawkLabel")}</span>
         </button>
         <button
           onClick={onToggleTts}
           className={clsx(
-            "text-[11px] px-2.5 py-1 rounded border",
+            "text-[11px] px-2 md:px-2.5 py-1 rounded border shrink-0",
             tts
               ? "text-neon-green border-neon-green/40 bg-neon-green/10"
               : "text-slate-400 border-base-700 hover:bg-base-700/40"
           )}
           title={t("sound")}
         >
-          {tts ? "🔊" : "🔇"} {t("sound")}
+          {tts ? "🔊" : "🔇"} <span className="hidden md:inline">{t("sound")}</span>
         </button>
         <button
           onClick={toggle}
-          className="text-[11px] px-2.5 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40 font-bold"
+          className="text-[11px] px-2 md:px-2.5 py-1 rounded border border-base-700 text-slate-300 hover:bg-base-700/40 font-bold shrink-0"
           title={lang === "ar" ? "English" : "العربية"}
         >
           {t("langBtn")}
