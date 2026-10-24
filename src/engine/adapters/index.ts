@@ -24,7 +24,10 @@ export function createAdapter(market: MarketConfig): MarketAdapter {
 
   if (market.id === "sa" && provider === "sahmk") {
     try {
-      return new SahmkAdapter();
+      // مرّر فحص ساعة تداول الفعلية: لا استطلاع والسوق مغلق (حفظ الحصّة المجانية)
+      return new SahmkAdapter({
+        isOpen: () => market.phaseFor("sahmk", Date.now()) !== "closed",
+      });
     } catch (e) {
       console.error(
         "[createAdapter] تعذّر تهيئة SAHMK — رجوع للمحاكاة:",

@@ -42,12 +42,13 @@ export class SahmkAdapter implements MarketAdapter {
   private floatCache = new Map<string, number>(); // فلوت مجلوب من fundamentals
   private fetchFloat: boolean;
   private pollMs: number;
+  private isOpen: () => boolean; // هل السوق مفتوح الآن؟ (لعدم حرق الحصّة والسوق مغلق)
   private onTick?: TickHandler;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastVol = new Map<string, number>();
   private stopped = false;
 
-  constructor() {
+  constructor(opts?: { isOpen?: () => boolean }) {
     this.key = process.env.SAHMK_API_KEY?.trim() || "";
     if (!this.key) throw new Error("SAHMK_API_KEY مفقود");
     this.index = (process.env.SA_INDEX ?? "TASI").toUpperCase();
@@ -55,6 +56,8 @@ export class SahmkAdapter implements MarketAdapter {
     // جلب الفلوت تلقائياً من /company (يتطلب Starter+؛ مُطفأ افتراضياً لحماية حصّة المجاني)
     this.fetchFloat = (process.env.SA_FETCH_FLOAT ?? "off").toLowerCase() === "on";
     this.pollMs = Math.max(5000, Number(process.env.SAHMK_POLL_MS ?? 15000));
+    // افتراضياً مفتوح دائماً؛ المصنع يمرّر فحص ساعة تداول الفعلية.
+    this.isOpen = opts?.isOpen ?? (() => true);
   }
 
   // الفلوت بالملايين: يدوي (SA_FLOATS) → مجلوب (cache) → افتراضي 50M
@@ -142,6 +145,10 @@ export class SahmkAdapter implements MarketAdapter {
   }
 
   async prepare(): Promise<SymbolSeed[]> {
+    if (!this.isOpen()) {
+      console.warn("[SAHMK] السوق مغلق — تخطّي التهيئة (حفظ حصّة الطلبات المجانية).");
+      return [];
+    }
     const rows = await this.fetchMovers();
     if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
     const seeds: SymbolSeed[] = [];
@@ -161,6 +168,7 @@ export class SahmkAdapter implements MarketAdapter {
 
   private async poll() {
     if (this.stopped || !this.onTick) return;
+    if (!this.isOpen()) return; // لا تحرق الحصّة والسوق مغلق (المؤقّت يستأنف عند الفتح)
     const rows = await this.fetchMovers();
     const now = Date.now();
     for (const r of rows) {
@@ -183,6 +191,7 @@ export class SahmkAdapter implements MarketAdapter {
   }
 
   async screen(maxPrice: number, limit: number): Promise<SymbolSeed[]> {
+    if (!this.isOpen()) return []; // السوق مغلق — لا فرز (حفظ الحصّة)
     const rows = await this.fetchMovers(Math.min(50, Math.max(10, limit)));
     if (this.fetchFloat) await Promise.all(rows.map((r) => this.loadFloat(r.symbol as string)));
     const out: SymbolSeed[] = [];
