@@ -1,0 +1,58 @@
+# Render Blueprint — نشر Zenith بضغطة
+# الاستخدام: render.com → New + → Blueprint → اختر مستودع zenith-scanner
+# الأسرار (sync: false) يطلبها Render منك عند النشر ولا تُحفظ في Git.
+
+services:
+  - type: web
+    name: zenith
+    runtime: node
+    plan: free            # غيّرها إلى starter للتشغيل الدائم (free ينام بعد 15د خمول)
+    region: frankfurt     # الأقرب للسعودية ضمن مناطق Render (أو singapore)
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+
+      # ===== السوق الأمريكي (Alpaca + Alpha Vantage) =====
+      - key: DATA_PROVIDER
+        value: alpaca
+      - key: ALPACA_KEY_ID
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: ALPACA_FEED
+        value: sip
+      - key: ALPHAVANTAGE_API_KEY
+        sync: false
+
+      # ===== طبقة Claude العربية =====
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: claude-haiku-5-5
+
+      # ===== تنبيهات برقية =====
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+      # ===== السوق السعودي (SAHMK Pro) =====
+      - key: SA_DATA_PROVIDER
+        value: sahmk
+      - key: SAHMK_API_KEY
+        sync: false
+      - key: SA_INDEX
+        value: TASI
+      - key: SAHMK_POLL_MS
+        value: "4000"
+      - key: SA_FETCH_FLOAT
+        value: "on"
+
+      # ===== الحماية بكلمة مرور =====
+      - key: APP_USER
+        value: zenith
+      - key: APP_PASSWORD
+        sync: false
