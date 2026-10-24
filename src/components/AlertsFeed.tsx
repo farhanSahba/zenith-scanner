@@ -1,0 +1,64 @@
+"use client";
+import clsx from "clsx";
+import type { Alert } from "@/engine/types";
+import { fmtClockLocal, fmtPrice } from "@/lib/format";
+
+export default function AlertsFeed({
+  alerts,
+  onSelect,
+}: {
+  alerts: Alert[];
+  onSelect: (sym: string) => void;
+}) {
+  return (
+    <div dir="ltr" className="overflow-auto flex-1">
+      <table className="w-full border-collapse text-[11px] tnum">
+        <thead className="sticky top-0 bg-base-750 text-slate-400">
+          <tr>
+            <th className="px-1.5 py-1 text-left font-semibold">Name</th>
+            <th className="px-1.5 py-1 text-left font-semibold">Reason</th>
+            <th className="px-1.5 py-1 text-right font-semibold">Price</th>
+            <th className="px-1.5 py-1 text-right font-semibold">Warn</th>
+            <th className="px-1.5 py-1 text-right font-semibold">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alerts.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-2 py-3 text-center text-slate-600">
+                — بانتظار التنبيهات —
+              </td>
+            </tr>
+          )}
+          {alerts.map((a) => (
+            <tr
+              key={a.id}
+              onClick={() => onSelect(a.symbol)}
+              className="cursor-pointer border-b border-base-800 hover:bg-base-700/40"
+            >
+              <td
+                className={clsx(
+                  "px-1.5 py-[3px] text-left font-bold",
+                  a.tone === "bull" ? "text-neon-green" : a.tone === "bear" ? "text-neon-red" : "text-slate-200"
+                )}
+              >
+                {a.symbol}
+              </td>
+              <td
+                className={clsx(
+                  "px-1.5 py-[3px] text-left",
+                  a.tone === "bull" ? "text-neon-green/90" : a.tone === "bear" ? "text-neon-red/90" : "text-slate-300"
+                )}
+              >
+                {a.reason}
+              </td>
+              <td className="px-1.5 py-[3px] text-right text-slate-200">{fmtPrice(a.price)}</td>
+              <td className="px-1.5 py-[3px] text-right text-neon-amber">{a.warning ?? ""}</td>
+              <td className="px-1.5 py-[3px] text-right text-slate-500">{fmtClockLocal(a.time)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

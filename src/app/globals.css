@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Segoe UI", system-ui, "Noto Kufi Arabic", Tahoma, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "SFMono-Regular", monospace;
+}
+
+html,
+body {
+  background: #05070a;
+  color: #cbd5e1;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* أرقام متساوية العرض في الجداول */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* شريط تمرير داكن رفيع */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: #0b0f15;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1e2632;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #2a3442;
+}
+
+/* توهّج نيون للنص */
+.glow-green {
+  text-shadow: 0 0 6px rgba(28, 255, 155, 0.7);
+}
+.glow-red {
+  text-shadow: 0 0 6px rgba(255, 45, 85, 0.6);
+}
+
+/* صف "كله أخضر" — إبراز القاعدة الذهبية */
+.row-allgreen {
+  background: linear-gradient(
+    90deg,
+    rgba(28, 255, 155, 0.14),
+    rgba(28, 255, 155, 0.03)
+  );
+  box-shadow: inset 2px 0 0 #1cff9b;
+}
+
+.panel {
+  background: #0b0f15;
+  border: 1px solid #161c26;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-title {
+  background: linear-gradient(180deg, #10151d, #0b0f15);
+  border-bottom: 1px solid #161c26;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
