@@ -17,11 +17,11 @@ export default function AlertsFeed({
       <table className="w-full border-collapse text-[11px] tnum">
         <thead className="sticky top-0 bg-base-750 text-slate-400">
           <tr>
-            <th className="px-1.5 py-1 text-left font-semibold">Name</th>
-            <th className="px-1.5 py-1 text-left font-semibold">Reason</th>
-            <th className="px-1.5 py-1 text-right font-semibold">Price</th>
-            <th className="px-1.5 py-1 text-right font-semibold">Warn</th>
-            <th className="px-1.5 py-1 text-right font-semibold">Time</th>
+            <th className="px-1.5 py-1 text-left font-semibold">{t("colName")}</th>
+            <th className="px-1.5 py-1 text-left font-semibold">{t("colReason")}</th>
+            <th className="px-1.5 py-1 text-right font-semibold">{t("colPrice")}</th>
+            <th className="px-1.5 py-1 text-right font-semibold">{t("colWarn")}</th>
+            <th className="px-1.5 py-1 text-right font-semibold">{t("colTime")}</th>
           </tr>
         </thead>
         <tbody>
@@ -52,7 +52,7 @@ export default function AlertsFeed({
                   a.tone === "bull" ? "text-neon-green/90" : a.tone === "bear" ? "text-neon-red/90" : "text-slate-300"
                 )}
               >
-                {a.reason}
+                {a.reason === "To HoD" ? t("reasonToHod") : a.reason}
               </td>
               <td className="px-1.5 py-[3px] text-right text-slate-200">{fmtPrice(a.price)}</td>
               <td className="px-1.5 py-[3px] text-right text-neon-amber">{a.warning ?? ""}</td>

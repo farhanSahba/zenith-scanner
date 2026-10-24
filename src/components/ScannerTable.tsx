@@ -3,21 +3,25 @@ import clsx from "clsx";
 import type { SymbolSnapshot } from "@/engine/types";
 import { levelText, levelBg } from "@/lib/levels";
 import { fmtPrice, fmtVol } from "@/lib/format";
-import { useLang } from "@/lib/i18n";
+import { useLang, type TKey } from "@/lib/i18n";
 
-const LABELS: Record<string, string> = {
-  name: "Name",
-  price: "Price",
-  gap: "Gap",
-  volume: "Vol",
-  float: "Float",
+// أعمدة قابلة للترجمة
+const TRANS: Record<string, TKey> = {
+  name: "colName",
+  price: "colPrice",
+  volume: "colVol",
+  gap: "colGap",
+  float: "colFloat",
+  twoMin: "col2Min",
+};
+// مصطلحات الماسح المختصرة (تبقى كما هي في اللغتين)
+const FIXED: Record<string, string> = {
   zenV: "ZenV",
   zenP: "ZenP",
   zenVR: "ZenVR",
   atrSprd: "AtrSprd",
   atrVwap: "AtrVwap",
   atrHoD: "AtrHoD",
-  twoMin: "2Min%",
   floatRot: "Rot",
 };
 
@@ -60,7 +64,7 @@ export default function ScannerTable({
                   c === "name" && "text-left"
                 )}
               >
-                {LABELS[c] ?? c}
+                {TRANS[c] ? t(TRANS[c]) : FIXED[c] ?? c}
               </th>
             ))}
           </tr>

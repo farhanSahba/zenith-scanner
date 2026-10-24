@@ -50,7 +50,7 @@ export default function TopBar({
               : "text-neon-amber border-neon-amber/40 bg-neon-amber/10"
           )}
         >
-          {snap?.dataSource === "alpaca" ? "LIVE · Alpaca" : t("sim")}
+          {snap?.dataSource === "alpaca" ? t("live") : t("sim")}
         </span>
         <span className="flex items-center gap-1 text-[10px] text-slate-500">
           <span
