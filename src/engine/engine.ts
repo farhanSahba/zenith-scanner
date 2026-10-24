@@ -37,20 +37,26 @@ function isDilutionNews(n: NewsItem): boolean {
   return n.sentiment === "dilution" || DILUTION_RE.test(n.headline);
 }
 
-// نص رسالة Telegram لتنبيه (أيقونة حسب النوع + الرمز + السبب + السعر)
-const TG_ICON: Record<string, string> = {
-  toHod: "🔔",
-  up2m: "📈",
-  down2m: "📉",
-  dilution: "⚠️",
-  surge: "⚡",
-  approachHod: "🦅",
-  new: "✨",
-};
+// نص رسالة Telegram لتنبيه — صيغة واضحة ومميّزة لكل نوع (أيقونة + عنوان + تفاصيل).
 function formatTg(a: Alert): string {
-  const em = TG_ICON[a.kind ?? ""] ?? "•";
-  const warn = a.warning ? ` ${a.warning}` : "";
-  return `${em} <b>${a.symbol}</b> — ${a.reason}${warn}\nالسعر: ${a.price}`;
+  const sym = `<b>${a.symbol}</b>`;
+  const price = `${a.price}$`;
+  const num = () => {
+    const n = parseFloat(a.reason.match(/[+-]?[\d.]+/)?.[0] ?? "0");
+    return Number.isFinite(n) ? n : 0;
+  };
+  switch (a.kind) {
+    case "toHod":
+      return `🟢 <b>كسر القمة</b> · دخول\n${sym}  ·  ${price}\nاخترق قمة اليوم بزخم صاعد`;
+    case "up2m":
+      return `🚀 <b>زخم قوي</b> · دخول\n${sym}  ·  ${price}\n+${Math.abs(num()).toFixed(1)}% خلال دقيقتين`;
+    case "down2m":
+      return `🔻 <b>هبوط حاد</b>\n${sym}  ·  ${price}\n${num().toFixed(1)}% خلال دقيقتين`;
+    case "dilution":
+      return `⚠️ <b>تحذير: تخفيف</b>\n${sym}  ·  ${price}\nخبر طرح أسهم — احذر الفخّ 🚫`;
+    default:
+      return `🔔 ${sym}  ·  ${price}\n${a.reason}`;
+  }
 }
 
 export class ScannerEngine {
