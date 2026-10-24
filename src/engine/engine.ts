@@ -308,7 +308,7 @@ export class ScannerEngine {
       universeCount: this.states.size,
       dataSource: this.provider,
       note: this.note || undefined,
-      telegram: telegramEnabled() && this.provider !== "sim",
+      telegram: telegramEnabled() && (this.provider !== "sim" || process.env.TELEGRAM_SIM === "on"),
     };
   }
 
@@ -345,7 +345,9 @@ export class ScannerEngine {
 
   // يرسل التنبيهات المهمّة للجوال عبر Telegram (مرة لكل تنبيه، تهدئة 2د لكل رمز).
   private pushTelegram(now: number) {
-    if (this.provider === "sim" || !telegramEnabled()) return; // لا نرسل تنبيهات محاكاة للجوال
+    if (!telegramEnabled()) return;
+    // المحاكاة لا تُرسل للجوال افتراضياً — إلا بتفعيل التجربة TELEGRAM_SIM=on
+    if (this.provider === "sim" && process.env.TELEGRAM_SIM !== "on") return;
     for (const a of this.alerts) {
       if (this.tgSent.has(a.id)) continue;
       this.tgSent.add(a.id);
