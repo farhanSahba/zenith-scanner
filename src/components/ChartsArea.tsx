@@ -73,6 +73,11 @@ export default function ChartsArea({ symbol, market }: { symbol: string | null; 
         {m ? (
           <>
             <span className="font-black text-slate-100">{m.symbol}</span>
+            {m.name && (
+              <span className="text-slate-400 text-[12px] font-medium" dir="rtl">
+                {m.name}
+              </span>
+            )}
             <span className={clsx("tnum", m.changePct >= 0 ? "text-neon-green" : "text-neon-red")}>
               {fmtPrice(m.price)} ({fmtPct(m.changePct)})
             </span>

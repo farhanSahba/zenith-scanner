@@ -60,7 +60,8 @@ function fmtM(n: number): string {
 
 // نص رسالة Telegram لتنبيه — عنوان مميّز + بيانات + سطر تنفيذي + وقت ورابط الشارت (حسب السوق).
 function formatTg(a: Alert, s: SymbolSnapshot | undefined, market: MarketConfig): string {
-  const sym = `<b>${a.symbol}</b>`;
+  // الرمز + اسم الشركة إن توفّر (السوق السعودي)
+  const sym = s?.name ? `<b>${a.symbol}</b> ${s.name}` : `<b>${a.symbol}</b>`;
   const price = `${a.price} ${market.currency}`;
   const num = () => {
     const n = parseFloat(a.reason.match(/[+-]?[\d.]+/)?.[0] ?? "0");
@@ -170,6 +171,7 @@ export class ScannerEngine {
     for (const seed of seeds) {
       const st = new SymbolState({
         symbol: seed.symbol,
+        name: seed.name,
         float: seed.float,
         avgDailyVol: seed.avgDailyVol,
         prevClose: seed.prevClose,
@@ -224,6 +226,7 @@ export class ScannerEngine {
         if (this.states.size >= MAX_UNIVERSE) break;
         const st = new SymbolState({
           symbol: seed.symbol,
+          name: seed.name,
           float: seed.float,
           avgDailyVol: seed.avgDailyVol,
           prevClose: seed.prevClose,
@@ -442,6 +445,7 @@ export class ScannerEngine {
       bars15: aggregate(bars1, 15),
       meta: {
         symbol: st.symbol,
+        name: st.name,
         price: st.price,
         vwap: st.vwap,
         dayHigh: st.dayHigh,
@@ -471,6 +475,7 @@ export class ScannerEngine {
 
 export interface ChartMeta {
   symbol: string;
+  name?: string;
   price: number;
   vwap: number;
   dayHigh: number;

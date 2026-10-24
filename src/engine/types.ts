@@ -44,6 +44,7 @@ export interface Cell {
 
 export interface SymbolSnapshot {
   symbol: string;
+  name?: string; // اسم الشركة (السوق السعودي)
   price: number;
   prevClose: number;
   open: number;

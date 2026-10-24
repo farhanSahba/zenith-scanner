@@ -3,6 +3,7 @@ import type { Tick } from "../types";
 // بذرة تهيئة رمز في الكون
 export interface SymbolSeed {
   symbol: string;
+  name?: string; // اسم الشركة (المزوّد السعودي يوفّره؛ الأمريكي يتركه)
   float: number; // بالملايين من الأسهم
   avgDailyVol: number; // أسهم
   prevClose: number;

@@ -4,6 +4,7 @@ import type { OHLCV, Tick, SessionPhase } from "./types";
 // حالة لحظية لكل رمز: تُحدَّث مع كل tick وتحسب المؤشرات المتدحرجة.
 export class SymbolState {
   readonly symbol: string;
+  readonly name?: string; // اسم الشركة (السوق السعودي)
   float: number; // بالملايين من الأسهم
   avgDailyVol: number; // متوسط حجم اليوم (لحساب ZenVR)
   prevClose: number;
@@ -28,6 +29,7 @@ export class SymbolState {
 
   constructor(opts: {
     symbol: string;
+    name?: string;
     float: number;
     avgDailyVol: number;
     prevClose: number;
@@ -35,6 +37,7 @@ export class SymbolState {
     dayVwap?: number; // VWAP جلسة اليوم
   }) {
     this.symbol = opts.symbol;
+    this.name = opts.name;
     this.float = opts.float;
     this.avgDailyVol = opts.avgDailyVol;
     this.prevClose = opts.prevClose;

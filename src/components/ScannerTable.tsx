@@ -105,13 +105,24 @@ function Cell({ col, s }: { col: string; s: SymbolSnapshot }) {
   const { t } = useLang();
   if (col === "name") {
     return (
-      <td className="px-1.5 py-[3px] text-left font-bold text-slate-100 whitespace-nowrap">
-        {s.dilution && (
-          <span className="text-neon-amber mr-1" title={t("dilutionWarn")}>
-            ⚠
+      <td className="px-1.5 py-[3px] text-left whitespace-nowrap">
+        <span className="font-bold text-slate-100">
+          {s.dilution && (
+            <span className="text-neon-amber mr-1" title={t("dilutionWarn")}>
+              ⚠
+            </span>
+          )}
+          {s.symbol}
+        </span>
+        {s.name && (
+          <span
+            className="block text-[9px] text-slate-500 font-normal leading-tight truncate max-w-[88px]"
+            dir="rtl"
+            title={s.name}
+          >
+            {s.name}
           </span>
         )}
-        {s.symbol}
       </td>
     );
   }

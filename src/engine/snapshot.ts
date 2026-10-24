@@ -122,6 +122,7 @@ export function buildSymbolSnapshot(
 
   return {
     symbol: s.symbol,
+    name: s.name,
     price,
     prevClose: s.prevClose,
     open: s.open,
