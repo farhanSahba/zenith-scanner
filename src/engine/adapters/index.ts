@@ -1,5 +1,6 @@
 import { SimAdapter } from "./simAdapter";
 import { AlpacaAdapter } from "./alpacaAdapter";
+import { SahmkAdapter } from "./sahmkAdapter";
 import type { MarketAdapter } from "./types";
 import type { MarketConfig } from "../markets";
 
@@ -21,6 +22,17 @@ export function createAdapter(market: MarketConfig): MarketAdapter {
     }
   }
 
-  // لاحقاً: if (market.id === "sa" && provider === "sahmk") return new SahmkAdapter();
+  if (market.id === "sa" && provider === "sahmk") {
+    try {
+      return new SahmkAdapter();
+    } catch (e) {
+      console.error(
+        "[createAdapter] تعذّر تهيئة SAHMK — رجوع للمحاكاة:",
+        (e as Error).message
+      );
+      return new SimAdapter(count, "sa");
+    }
+  }
+
   return new SimAdapter(count, market.simProfile);
 }

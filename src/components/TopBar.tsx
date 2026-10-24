@@ -64,12 +64,14 @@ export default function TopBar({
         <span
           className={clsx(
             "text-[10px] px-2 py-[2px] rounded border font-bold uppercase",
-            snap?.dataSource === "alpaca"
+            snap?.dataSource && snap.dataSource !== "sim"
               ? "text-neon-green border-neon-green/40 bg-neon-green/10"
               : "text-neon-amber border-neon-amber/40 bg-neon-amber/10"
           )}
         >
-          {snap?.dataSource === "alpaca" ? t("live") : t("sim")}
+          {snap?.dataSource && snap.dataSource !== "sim"
+            ? `${t("live")} · ${snap.dataSource.toUpperCase()}`
+            : t("sim")}
         </span>
         <span className="flex items-center gap-1 text-[10px] text-slate-500">
           <span
