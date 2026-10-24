@@ -21,6 +21,13 @@ Zenith **ليس موقعاً ثابتاً** — هو تطبيق Next.js بخاد
 
 VPS صغير (أرخص خطة KVM تكفي، ~1–2GB RAM) يشغّل المشروع تماماً.
 
+### ⚡ أسرع طريقة: سكربت واحد
+على الخادم (كـ root) نفّذ هذا السطر — يثبّت كل شي، يبني، يشغّل دائماً، ويضبط nginx + HTTPS تلقائياً (يطلب منك لصق مفاتيحك ونطاقك فقط):
+```bash
+apt-get update -y && apt-get install -y git && git clone https://github.com/farhanSahba/zenith-scanner.git /var/www/zenith && bash /var/www/zenith/scripts/deploy-vps.sh
+```
+أو الخطوات اليدوية أدناه للفهم/التحكّم.
+
 ### 1) تجهيز الخادم (SSH)
 ```bash
 ssh root@<ip-الخادم>
