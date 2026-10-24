@@ -9,11 +9,15 @@ export default function TopBar({
   connected,
   tts,
   onToggleTts,
+  hawk,
+  onToggleHawk,
 }: {
   snap: Snapshot | null;
   connected: boolean;
   tts: boolean;
   onToggleTts: () => void;
+  hawk: boolean;
+  onToggleHawk: () => void;
 }) {
   const { t, toggle, lang } = useLang();
   const fut = snap?.futures ?? { dj: 0, sp: 0 };
@@ -93,6 +97,18 @@ export default function TopBar({
           <div className="text-[10px] text-slate-500">{t("ahClose")}</div>
           <div className="tnum text-neon-cyan text-sm">{fmtCountdown(snap?.toAhCloseMs ?? 0)}</div>
         </div>
+        <button
+          onClick={onToggleHawk}
+          className={clsx(
+            "text-[11px] px-2.5 py-1 rounded border",
+            hawk
+              ? "text-neon-amber border-neon-amber/50 bg-neon-amber/10"
+              : "text-slate-400 border-base-700 hover:bg-base-700/40"
+          )}
+          title={t("hawkTip")}
+        >
+          🦅 {t("hawkLabel")}
+        </button>
         <button
           onClick={onToggleTts}
           className={clsx(

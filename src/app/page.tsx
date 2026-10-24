@@ -65,8 +65,23 @@ function Dashboard() {
   const { snap, connected } = useStream();
   const [selected, setSelected] = useState<string | null>(null);
   const [tts, setTts] = useState(false);
+  const [hawk, setHawk] = useState(true);
   const [tab, setTab] = useState<"ai" | "news">("ai");
   const lastSpoken = useRef<string | null>(null);
+
+  // استرجاع تفضيل وضع الصقر (افتراضياً مُفعّل)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("zenith_hawk") === "0") setHawk(false);
+    } catch {
+      /* تجاهل */
+    }
+  }, []);
+
+  // التنبيهات المعروضة: الوضع الهادئ يُخفي إشارات الصقر المبكرة
+  const alerts = hawk
+    ? snap?.alerts ?? []
+    : (snap?.alerts ?? []).filter((a) => a.tier !== "early");
 
   // اختيار رمز افتراضي أول ما تصل الداتا
   useEffect(() => {
@@ -79,27 +94,53 @@ function Dashboard() {
     if (first) setSelected(first);
   }, [snap, selected]);
 
-  // نطق التنبيهات الجديدة
+  // نطق التنبيهات الجديدة (أعدى في وضع الصقر)
   useEffect(() => {
-    if (!tts || !snap?.alerts?.length) return;
-    const newest = snap.alerts[0];
+    if (!tts || !alerts.length) return;
+    const newest = alerts[0];
     if (newest.id === lastSpoken.current) return;
-    const idx = snap.alerts.findIndex((a) => a.id === lastSpoken.current);
-    const fresh = idx === -1 ? snap.alerts.slice(0, 1) : snap.alerts.slice(0, Math.min(idx, 2));
+    const idx = alerts.findIndex((a) => a.id === lastSpoken.current);
+    const cap = hawk ? 3 : 2;
+    const fresh = idx === -1 ? alerts.slice(0, 1) : alerts.slice(0, Math.min(idx, cap));
     lastSpoken.current = newest.id;
     fresh.reverse().forEach((a) => speakAr(alertSpeech(a)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap, tts]);
 
   function toggleTts() {
     const next = !tts;
     setTts(next);
     setTtsEnabled(next);
-    if (next) lastSpoken.current = snap?.alerts[0]?.id ?? null;
+    if (next) lastSpoken.current = alerts[0]?.id ?? null;
+  }
+
+  function toggleHawk() {
+    setHawk((h) => {
+      const n = !h;
+      // أعد مزامنة آخر منطوق مع العرض الجديد حتى لا يُعيد التبديلُ نطق تنبيه قديم
+      const view = n
+        ? snap?.alerts ?? []
+        : (snap?.alerts ?? []).filter((a) => a.tier !== "early");
+      lastSpoken.current = view[0]?.id ?? null;
+      try {
+        localStorage.setItem("zenith_hawk", n ? "1" : "0");
+      } catch {
+        /* تجاهل */
+      }
+      return n;
+    });
   }
 
   return (
     <div className="h-screen flex flex-col bg-base-900 text-slate-300">
-      <TopBar snap={snap} connected={connected} tts={tts} onToggleTts={toggleTts} />
+      <TopBar
+        snap={snap}
+        connected={connected}
+        tts={tts}
+        onToggleTts={toggleTts}
+        hawk={hawk}
+        onToggleHawk={toggleHawk}
+      />
 
       <main className="flex-1 min-h-0 flex flex-col gap-2 p-2">
         {/* لوحات الماسح + التنبيهات */}
@@ -131,9 +172,9 @@ function Dashboard() {
               title={t("panelAlerts")}
               accent="#ffb020"
               className="h-full"
-              badge={<span className="text-slate-600 text-[10px]">{snap?.alerts.length ?? 0}</span>}
+              badge={<span className="text-slate-600 text-[10px]">{alerts.length}</span>}
             >
-              <AlertsFeed alerts={snap?.alerts ?? []} onSelect={setSelected} />
+              <AlertsFeed alerts={alerts} onSelect={setSelected} />
             </Panel>
           </div>
         </section>
@@ -191,16 +232,31 @@ function TabBtn({
   );
 }
 
-// تحويل التنبيه لنص عربي منطوق
+// تحويل التنبيه لنص عربي منطوق (حسب نوعه)
 function alertSpeech(a: Alert): string {
   const sym = a.symbol.split("").join(" ");
-  if (a.reason.includes("To HoD")) return `${sym} يقترب من قمة اليوم`;
-  const m = a.reason.match(/([+-]?[\d.]+)\s*% \/2Min/);
-  if (m) {
-    const v = parseFloat(m[1]);
-    return v >= 0
-      ? `${sym} ارتفاع ${Math.abs(v).toFixed(0)} بالمئة في دقيقتين`
-      : `${sym} هبوط ${Math.abs(v).toFixed(0)} بالمئة في دقيقتين`;
+  switch (a.kind) {
+    case "toHod":
+      return `${sym} يكسر قمة اليوم`;
+    case "approachHod":
+      return `${sym} يقترب من القمة`;
+    case "surge":
+      return `${sym} انفجار حجم`;
+    case "new":
+      return `${sym} مرشّح جديد`;
+    case "up2m":
+    case "down2m": {
+      const m = a.reason.match(/([+-]?[\d.]+)\s*% \/2Min/);
+      if (m) {
+        const v = parseFloat(m[1]);
+        return v >= 0
+          ? `${sym} ارتفاع ${Math.abs(v).toFixed(0)} بالمئة في دقيقتين`
+          : `${sym} هبوط ${Math.abs(v).toFixed(0)} بالمئة في دقيقتين`;
+      }
+      return `${sym} ${a.reason}`;
+    }
+    default:
+      if (a.reason.includes("To HoD")) return `${sym} يقترب من قمة اليوم`;
+      return `${sym} ${a.reason}`;
   }
-  return `${sym} ${a.reason}`;
 }

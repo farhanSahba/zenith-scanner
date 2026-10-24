@@ -64,6 +64,7 @@ export interface SymbolSnapshot {
   atrHoD: number;
   atrSprd: number;
   floatRot: number;
+  atrReliable: boolean; // ATR محسوب من بارات حقيقية (مو القيمة الاحتياطية)
   spread: number;
   bid: number;
   ask: number;
@@ -74,10 +75,24 @@ export interface SymbolSnapshot {
   updatedAt: number;
 }
 
+// نوع التنبيه (لترجمة السبب والنطق)
+export type AlertKind =
+  | "toHod" // لمس/كسر قمة اليوم
+  | "approachHod" // يقترب من القمة (قبل الكسر)
+  | "surge" // انفجار حجم
+  | "up2m" // زخم دقيقتين صاعد
+  | "down2m" // هبوط دقيقتين حاد
+  | "new"; // مرشّح جديد ساخن
+
+// طبقة التنبيه: مبكرة (الصقر) / لحظة الدخول / تأكيد
+export type AlertTier = "early" | "trigger" | "confirm";
+
 export interface Alert {
   id: string;
   symbol: string;
   reason: string; // "To HoD" | "+11.6% /2Min" | ...
+  kind?: AlertKind;
+  tier?: AlertTier; // "early" = إشارات الصقر المبكرة (تُخفى في الوضع الهادئ)
   price: number;
   warning?: string;
   time: number;

@@ -79,6 +79,7 @@ export function buildSymbolSnapshot(
   const atrVwap = atr > 0 ? (price - vwap) / atr : 0;
   const atrHoD = atr > 0 ? (s.dayHigh - price) / atr : 0;
   const atrSprd = atr > 0 ? spread / atr : 0;
+  const atrReliable = s.bars1m.length >= 2; // ATR من بارات مغلقة حقيقية
   const floatRot = s.float > 0 ? s.volume / (s.float * 1_000_000) : 0;
 
   // ZenVR: الحجم الفعلي ÷ الحجم المتوقّع بهذا الوقت من الجلسة
@@ -141,6 +142,7 @@ export function buildSymbolSnapshot(
     atrHoD,
     atrSprd,
     floatRot,
+    atrReliable,
     spread,
     bid: s.bid,
     ask: s.ask,

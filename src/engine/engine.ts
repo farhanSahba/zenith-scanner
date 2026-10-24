@@ -46,6 +46,7 @@ export class ScannerEngine {
   private screenTimer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private initPromise: Promise<void> | null = null;
+  private screenedOnce = false; // أول فرز = بناء الكون الأولي (لا تنبيهات «مرشّح جديد»)
 
   constructor() {
     const requested = (process.env.DATA_PROVIDER ?? "sim").toLowerCase();
@@ -114,6 +115,8 @@ export class ScannerEngine {
     const MAX_UNIVERSE = 150;
     try {
       const seeds = await adapter.screen(maxPrice, limit);
+      const firstScreen = !this.screenedOnce;
+      this.screenedOnce = true;
       const newSyms: string[] = [];
       for (const seed of seeds) {
         if (this.states.has(seed.symbol)) continue;
@@ -134,7 +137,37 @@ export class ScannerEngine {
           `[AutoScreen] فرز: ${seeds.length} مرشّح، أُضيف ${newSyms.length} جديد (الكون ${this.states.size}).`
         );
       }
-      if (newSyms.length) adapter.subscribe(newSyms);
+      if (newSyms.length) {
+        adapter.subscribe(newSyms);
+        // تنبيه «مرشّح جديد ساخن» (طبقة الصقر) — فقط بعد الفرز الأول (ليس عند بناء الكون)،
+        // وأعلى 6 فجوة فقط لتجنّب دفقة عند ظهور عدة مرشّحين دفعة واحدة.
+        if (!firstScreen) {
+          const now = Date.now();
+          const fresh = new Set(newSyms);
+          const cand = seeds
+            .filter((s) => fresh.has(s.symbol))
+            .map((s) => ({
+              s,
+              gap: s.prevClose > 0 ? ((s.open - s.prevClose) / s.prevClose) * 100 : 0,
+            }))
+            .filter((x) => x.gap >= 3)
+            .sort((a, b) => b.gap - a.gap)
+            .slice(0, 6);
+          const newAlerts: Alert[] = cand.map(({ s, gap }) => ({
+            id: `${s.symbol}-new-${now}`,
+            symbol: s.symbol,
+            reason: `مرشّح جديد +${gap.toFixed(0)}%`,
+            kind: "new",
+            tier: "early",
+            price: round(s.open || s.prevClose, 2),
+            time: now,
+            tone: "bull",
+          }));
+          if (newAlerts.length) {
+            this.alerts = [...newAlerts, ...this.alerts].slice(0, ALERTS_CAP);
+          }
+        }
+      }
     } catch {
       /* تجاهل أخطاء الفرز المؤقتة */
     }
@@ -167,6 +200,7 @@ export class ScannerEngine {
 
   private buildSnapshot() {
     const now = Date.now();
+    const phase = phaseFor(this.provider, now);
     const sessionProgress = Math.max(
       0.05,
       Math.min(1, (now - this.startReal) / (8 * 60 * 1000) + 0.05)
@@ -181,8 +215,8 @@ export class ScannerEngine {
 
     const panels = classify(all);
 
-    // تنبيهات جديدة من كل الكون
-    const fresh = this.alertEngine.update(all, now);
+    // تنبيهات جديدة من كل الكون (لا تنبيهات والسوق مغلق)
+    const fresh = this.alertEngine.update(all, now, phase);
     if (fresh.length) {
       this.alerts = [...fresh.reverse(), ...this.alerts].slice(0, ALERTS_CAP);
     }
@@ -192,7 +226,7 @@ export class ScannerEngine {
     this.futures.sp = clamp(this.futures.sp + (Math.random() - 0.5) * 0.04, -3, 3);
 
     this.latest = {
-      phase: phaseFor(this.provider, now),
+      phase,
       clock: now,
       marketClock: marketClock(now),
       toAhCloseMs: msToAhClose(now),

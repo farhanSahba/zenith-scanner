@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import type { Alert } from "@/engine/types";
 import { fmtClockLocal, fmtPrice } from "@/lib/format";
-import { useLang } from "@/lib/i18n";
+import { useLang, type TKey } from "@/lib/i18n";
 
 export default function AlertsFeed({
   alerts,
@@ -52,7 +52,12 @@ export default function AlertsFeed({
                   a.tone === "bull" ? "text-neon-green/90" : a.tone === "bear" ? "text-neon-red/90" : "text-slate-300"
                 )}
               >
-                {a.reason === "To HoD" ? t("reasonToHod") : a.reason}
+                {a.tier === "early" && (
+                  <span className="text-neon-amber mr-1" title={t("tierEarly")}>
+                    ⚡
+                  </span>
+                )}
+                {reasonLabel(a, t)}
               </td>
               <td className="px-1.5 py-[3px] text-right text-slate-200">{fmtPrice(a.price)}</td>
               <td className="px-1.5 py-[3px] text-right text-neon-amber">{a.warning ?? ""}</td>
@@ -63,4 +68,20 @@ export default function AlertsFeed({
       </table>
     </div>
   );
+}
+
+// سبب التنبيه مترجَماً حسب نوعه (مع إبقاء النِّسب كما هي)
+function reasonLabel(a: Alert, t: (k: TKey) => string): string {
+  switch (a.kind) {
+    case "toHod":
+      return t("reasonToHod");
+    case "approachHod":
+      return t("reasonApproachHod");
+    case "surge":
+      return a.reason.replace("انفجار حجم", t("reasonSurge"));
+    case "new":
+      return a.reason.replace("مرشّح جديد", t("reasonNewCand"));
+    default:
+      return a.reason === "To HoD" ? t("reasonToHod") : a.reason;
+  }
 }
